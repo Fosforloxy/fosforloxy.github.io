@@ -1,0 +1,269 @@
+/* ---------------------------------------------------------------
+   Finn Mulligan — specimen catalog
+   Palette, type scale, and layout tokens live here.
+   Edit these variables to reskin the whole site at once.
+----------------------------------------------------------------*/
+
+:root {
+  --paper:      #E9ECE5;  /* pale sage ground */
+  --paper-deep: #DDE2D8;  /* card fill */
+  --ink:        #171B17;  /* body text */
+  --ink-soft:   #4A544B;  /* secondary text */
+  --moss:       #3E6B52;  /* primary accent */
+  --glass:      #8199A0;  /* rules, labels, hairlines */
+  --amber:      #A8642B;  /* used once, on hover */
+
+  --display: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  --body:    "Newsreader", Georgia, serif;
+  --mono:    "IBM Plex Mono", ui-monospace, monospace;
+
+  --measure: 68ch;
+  --gap: 1.5rem;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  font-optical-sizing: auto;
+}
+
+.wrap {
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 0 1.5rem 5rem;
+}
+
+/* --- masthead ------------------------------------------------ */
+
+.masthead { padding: 3.5rem 0 0; }
+
+.masthead h1 {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(2.4rem, 7vw, 4rem);
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.75rem;
+}
+
+.standfirst {
+  max-width: 44ch;
+  margin: 0 0 1.5rem;
+  font-size: 1.15rem;
+  color: var(--ink-soft);
+}
+
+.contact {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+  margin: 0 0 2rem;
+}
+
+.contact a { color: var(--moss); text-decoration: none; border-bottom: 1px solid var(--glass); }
+.contact a:hover { color: var(--amber); border-color: var(--amber); }
+.contact span[aria-hidden] { color: var(--glass); padding: 0 0.5rem; }
+
+/* --- the living rule: cellular automaton band ---------------- */
+
+.automaton {
+  display: block;
+  width: 100%;
+  height: 92px;
+  border-top: 1px solid var(--glass);
+  border-bottom: 1px solid var(--glass);
+  background: transparent;
+  margin-bottom: 0.6rem;
+}
+
+.automaton-caption {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--glass);
+  margin: 0 0 3.5rem;
+}
+
+/* --- specimen grid ------------------------------------------- */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: var(--gap);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.specimen {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper-deep);
+  border: 1px solid var(--glass);
+  padding: 1.25rem 1.25rem 1.4rem;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 140ms ease, transform 140ms ease;
+}
+
+.specimen:hover,
+.specimen:focus-visible {
+  border-color: var(--amber);
+  transform: translateY(-2px);
+}
+
+.specimen:focus-visible { outline: 2px solid var(--moss); outline-offset: 3px; }
+
+.kind {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--glass);
+  margin-bottom: 0.9rem;
+}
+
+.specimen h2 {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 1.4rem;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  margin: 0 0 0.5rem;
+}
+
+.specimen p {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.specimen .year {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--glass);
+  margin-top: auto;
+  padding-top: 1rem;
+}
+
+.specimen[data-state="soon"] { opacity: 0.62; }
+.specimen[data-state="soon"]:hover { transform: none; border-color: var(--glass); }
+
+/* --- interior pages ------------------------------------------ */
+
+.back {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--moss);
+  text-decoration: none;
+  margin: 3rem 0 2.5rem;
+}
+.back:hover { color: var(--amber); }
+
+.page-title {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  margin: 0 0 1rem;
+}
+
+.lede { max-width: var(--measure); color: var(--ink-soft); font-size: 1.1rem; margin: 0 0 3rem; }
+
+/* --- writing list -------------------------------------------- */
+
+.entries { list-style: none; margin: 0; padding: 0; max-width: var(--measure); }
+
+.entry {
+  border-top: 1px solid var(--glass);
+  padding: 1.75rem 0;
+}
+.entry:last-child { border-bottom: 1px solid var(--glass); }
+
+.entry h2 {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 1.35rem;
+  margin: 0 0 0.4rem;
+  line-height: 1.2;
+}
+
+.entry .meta {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--glass);
+  margin: 0 0 0.7rem;
+}
+
+.entry p { margin: 0 0 0.9rem; color: var(--ink-soft); font-size: 0.98rem; }
+
+.entry a.read {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--moss);
+  text-decoration: none;
+  border-bottom: 1px solid var(--glass);
+}
+.entry a.read:hover { color: var(--amber); border-color: var(--amber); }
+
+/* --- photo gallery ------------------------------------------- */
+
+.plates {
+  columns: 3 15rem;
+  column-gap: var(--gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plate {
+  break-inside: avoid;
+  margin: 0 0 var(--gap);
+  background: var(--paper-deep);
+  border: 1px solid var(--glass);
+  padding: 0.6rem 0.6rem 0.75rem;
+}
+
+.plate img { display: block; width: 100%; height: auto; }
+
+.plate figcaption {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  color: var(--glass);
+  padding-top: 0.6rem;
+}
+
+/* --- footer --------------------------------------------------- */
+
+footer {
+  margin-top: 4.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--glass);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  color: var(--glass);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}

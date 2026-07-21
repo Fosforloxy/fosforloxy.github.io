@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Squig Lab</title>
+<style>
+  :root{
+    --paper:#faf7f0;
+    --paper-deep:#f2eee4;
+    --ink:#1c1b18;
+    --pink:#ef5f9f;
+    --rule:#dcd6c8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--paper-deep);
+    color:var(--ink);
+    font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    font-size:12px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1060px;margin:0 auto;padding:20px 16px 48px}
+  header{display:flex;align-items:baseline;gap:14px;border-bottom:2px solid var(--ink);padding-bottom:10px;margin-bottom:18px;flex-wrap:wrap}
+  h1{font-size:22px;letter-spacing:.18em;font-weight:700}
+  .eyebrow{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#6f6a5c}
+  main{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start}
+  @media(max-width:820px){main{grid-template-columns:1fr}}
+  .stage{
+    background:var(--paper);
+    border:1.5px solid var(--ink);
+    border-radius:6px;
+    box-shadow:4px 4px 0 rgba(28,27,24,.12);
+    padding:10px;
+    position:sticky;top:12px;
+  }
+  @media(max-width:820px){.stage{position:static}}
+  canvas{display:block;width:100%;height:auto;border-radius:3px;cursor:pointer}
+  .stage-foot{display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:8px;flex-wrap:wrap}
+  .stage-foot .hint{color:#8a8474;font-size:10px;letter-spacing:.06em}
+  .panel{display:flex;flex-direction:column;gap:14px}
+  .group{background:var(--paper);border:1.5px solid var(--ink);border-radius:6px;padding:12px 12px 6px}
+  .group h2{font-size:10px;letter-spacing:.16em;text-transform:uppercase;border-bottom:1px solid var(--rule);padding-bottom:6px;margin-bottom:8px}
+  .row{display:grid;grid-template-columns:1fr 44px;gap:8px;align-items:center;margin-bottom:9px}
+  .row label{display:block;font-size:11px;letter-spacing:.04em;margin-bottom:3px;color:#43403a}
+  .row output{font-size:11px;text-align:right;color:#6f6a5c;font-variant-numeric:tabular-nums}
+  input[type=range]{width:100%;appearance:none;-webkit-appearance:none;height:20px;background:transparent;cursor:pointer}
+  input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--ink);border-radius:1px}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--paper);border:2.5px solid var(--ink);margin-top:-6px}
+  input[type=range]:focus-visible::-webkit-slider-thumb{border-color:var(--pink);outline:2px solid var(--pink);outline-offset:2px}
+  input[type=range]::-moz-range-track{height:2px;background:var(--ink)}
+  input[type=range]::-moz-range-thumb{width:11px;height:11px;border-radius:50%;background:var(--paper);border:2.5px solid var(--ink)}
+  select,input[type=number]{
+    font-family:inherit;font-size:12px;background:var(--paper);color:var(--ink);
+    border:1.5px solid var(--ink);border-radius:4px;padding:4px 6px;width:100%;
+  }
+  .inline{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:9px}
+  .sel-label{font-size:11px;color:#43403a;display:block;margin-bottom:3px}
+  .check{display:flex;align-items:center;gap:8px;margin:2px 0 9px;font-size:11px;color:#43403a;cursor:pointer}
+  .check input{width:14px;height:14px;accent-color:var(--ink);cursor:pointer}
+  button{
+    font-family:inherit;font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+    background:var(--ink);color:var(--paper);border:1.5px solid var(--ink);
+    border-radius:4px;padding:8px 12px;cursor:pointer;
+  }
+  button.ghost{background:var(--paper);color:var(--ink)}
+  button:hover{transform:translate(-1px,-1px);box-shadow:2px 2px 0 rgba(28,27,24,.25)}
+  button:active{transform:none;box-shadow:none}
+  button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
+  @media(prefers-reduced-motion:reduce){button:hover{transform:none;box-shadow:none}}
+  .btnrow{display:flex;gap:8px;flex-wrap:wrap}
+  .seedrow{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;margin-bottom:9px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="../" style="display:inline-block;font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#6f6a5c;text-decoration:none;margin-bottom:12px">&#8592; Catalog</a>
+  <header>
+    <h1>SQUIG&nbsp;LAB</h1>
+    <span class="eyebrow">specimen generator &middot; phase 2 &middot; continuous arms, nesting &amp; weaving</span>
+  </header>
+
+  <main>
+    <div class="stage">
+      <canvas id="cv" width="900" height="900" aria-label="Generated squig drawing"></canvas>
+      <div class="stage-foot">
+        <span class="hint">click the paper for a new squig</span>
+        <div class="btnrow">
+          <button id="btnNew">New squig</button>
+          <button id="btnWild" class="ghost">Surprise me</button>
+          <button id="btnPng" class="ghost">Save PNG</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <section class="group" id="g-structure"><h2>Structure</h2></section>
+      <section class="group" id="g-path"><h2>Path character</h2></section>
+      <section class="group" id="g-tips"><h2>Tips &amp; branches</h2></section>
+      <section class="group" id="g-sym"><h2>Symmetry</h2>
+        <div class="inline">
+          <div><label class="sel-label" for="in-symN">radial fold</label>
+            <select id="in-symN">
+              <option value="1">none</option><option value="2">2-fold</option>
+              <option value="3">3-fold</option><option value="4">4-fold</option>
+              <option value="5">5-fold</option><option value="6">6-fold</option>
+            </select></div>
+          <div></div>
+        </div>
+      </section>
+      <section class="group" id="g-hand"><h2>Hand &amp; ink</h2>
+        <div class="inline">
+          <div><label class="sel-label" for="in-ink">marker</label>
+            <select id="in-ink">
+              <option value="#1c1b18">ink black</option>
+              <option value="#ef5f9f">hot pink</option>
+              <option value="#2e5b40">deep green</option>
+            </select></div>
+          <div></div>
+        </div>
+      </section>
+      <section class="group" id="g-seed">
+        <h2>Seed</h2>
+        <div class="seedrow">
+          <input type="number" id="seed" value="12" min="0" step="1" aria-label="Seed">
+          <button class="ghost" id="btnReroll" title="Random seed">&#9860;</button>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<script>
+(() => {
+const TAU = Math.PI * 2;
+
+/* ---------- deterministic RNG + noise ---------- */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function makeNoise(rng){
+  const g = Array.from({length:512}, () => rng());
+  return t => {
+    const i = Math.floor(t), f = t - i, u = f*f*(3-2*f);
+    const a = g[((i%512)+512)%512], b = g[(((i+1)%512)+512)%512];
+    return a + (b-a)*u;
+  };
+}
+const angNorm = a => Math.atan2(Math.sin(a), Math.cos(a));
+const lerpAngle = (a,b,t) => a + angNorm(b-a)*t;
+const snap90 = a => Math.round(a/(Math.PI/2))*(Math.PI/2);
+const lerp = (a,b,t) => a+(b-a)*t;
+const clamp = (v,lo,hi) => Math.min(hi, Math.max(lo, v));
+
+/* ---------- parameters ---------- */
+const P = {};
+const DEFS = [
+ ['g-structure','arms','arms',1,10,1,6],
+ ['g-structure','armLen','arm length',0.15,0.85,0.01,0.45],
+ ['g-structure','lenVar','length variance',0,0.8,0.01,0.35],
+ ['g-structure','armW','arm thickness',0.008,0.05,0.001,0.022],
+ ['g-structure','compact','tangle (compactness)',0,1,0.01,0.55],
+ ['g-structure','bodyR','body size',0.02,0.14,0.005,0.06],
+ ['g-path','rect','rectilinearity',0,1,0.01,0.12],
+ ['g-path','turnFreq','turn frequency',0,1,0.01,0.5],
+ ['g-path','wiggle','wiggle',0,0.5,0.01,0.22],
+ ['g-path','follow','nesting (follow)',0,1,0.01,0.45],
+ ['g-path','cross','crossing (seek)',0,1,0.01,0.35],
+ ['g-tips','curlChance','curl chance',0,1,0.01,0.4],
+ ['g-tips','curlTurns','curl tightness',0.4,2.5,0.05,1.1],
+ ['g-tips','hookChance','hook chance',0,1,0.01,0.2],
+ ['g-tips','bulbChance','bulb chance',0,1,0.01,0.15],
+ ['g-tips','branchChance','branch chance',0,1,0.01,0.25],
+ ['g-sym','symStr','symmetry strength',0,1,0.01,0.8],
+ ['g-hand','wobble','hand wobble',0,1,0.01,0.45],
+ ['g-hand','outline','outline weight',0.5,2,0.05,1],
+ ['g-hand','weave','weave (over/under)',0,1,0.01,0.7],
+];
+
+const fmt = v => Number.isInteger(v) ? String(v) : (+v).toFixed(2);
+const val = id => document.getElementById(id).value;
+
+function buildControls(){
+  for (const [gid,key,label,min,max,step,def] of DEFS){
+    P[key] = def;
+    const g = document.getElementById(gid);
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = '<div><label for="in-'+key+'">'+label+'</label>'
+      + '<input type="range" id="in-'+key+'" min="'+min+'" max="'+max+'" step="'+step+'" value="'+def+'"></div>'
+      + '<output id="out-'+key+'">'+fmt(def)+'</output>';
+    g.appendChild(row);
+    const inp = row.querySelector('input');
+    inp.addEventListener('input', () => {
+      P[key] = parseFloat(inp.value);
+      row.querySelector('output').textContent = fmt(P[key]);
+      draw();
+    });
+  }
+  const chk = document.createElement('label');
+  chk.className = 'check';
+  chk.innerHTML = '<input type="checkbox" id="in-solid"> solid black body';
+  document.getElementById('g-structure').appendChild(chk);
+  chk.querySelector('input').addEventListener('change', draw);
+  document.getElementById('in-symN').addEventListener('change', draw);
+  document.getElementById('in-ink').addEventListener('change', draw);
+}
+
+/* ---------- squig model ---------- */
+function buildSquig(S){
+  const seed = parseInt(val('seed')) || 0;
+  const rng = mulberry32(seed*2654435761 + 1013);
+  const noise = makeNoise(rng);
+  const cx = S/2, cy = S/2;
+  const bodyR = P.bodyR * S;
+  const wpx  = P.armW * S;
+  const step = S * 0.008;
+  const symN = parseInt(val('in-symN'));
+  const armLenPx = P.armLen * S * 0.55;
+  const maxR = bodyR + lerp(1.05, 0.30, P.compact) * armLenPx + S*0.03;
+  const turnEvery = Math.round(lerp(26, 7, P.turnFreq));
+
+  /* sensing hash (built during growth, wedge arms only) */
+  const sense = wpx*3.2;
+  const gap = wpx*1.55;
+  const cell = sense*0.75;
+  const hash = new Map();
+  const hkey = (x,y) => ((x/cell)|0) + ':' + ((y/cell)|0);
+  function insertPt(p, arm, idx, tang){
+    const k = hkey(p.x, p.y);
+    let a = hash.get(k);
+    if (!a){ a = []; hash.set(k, a); }
+    a.push({x:p.x, y:p.y, arm:arm, idx:idx, t:tang});
+  }
+  const selfSep = Math.ceil(wpx*4/step);
+  function nearestTube(pos, arm, idx, maxD){
+    const cx0 = (pos.x/cell)|0, cy0 = (pos.y/cell)|0;
+    let best = null, bd = maxD;
+    for (let dx=-1; dx<=1; dx++) for (let dy=-1; dy<=1; dy++){
+      const a = hash.get((cx0+dx)+':'+(cy0+dy));
+      if (!a) continue;
+      for (const q of a){
+        if (q.arm === arm && Math.abs(q.idx - idx) < selfSep) continue;
+        const d = Math.hypot(q.x-pos.x, q.y-pos.y);
+        if (d < bd){ bd = d; best = q; }
+      }
+    }
+    return best ? {q:best, d:bd} : null;
+  }
+
+  let armCounter = 0;
+
+  function grow(angle0, depth, startPos, budget){
+    const out = [];
+    const armId = armCounter++;
+    let heading = angle0 + (rng()-0.5)*0.7;
+    let pos = startPos ? {x:startPos.x, y:startPos.y}
+      : {x: cx + Math.cos(angle0)*bodyR*0.75, y: cy + Math.sin(angle0)*bodyR*0.75};
+    const len = budget != null ? budget
+      : armLenPx * clamp(1 + (rng()*2-1)*P.lenVar, 0.25, 2.2);
+    const n = Math.max(8, Math.round(len/step));
+    const nOff = rng()*1000;
+    const pts = [{x:pos.x, y:pos.y}];
+    let mode = 0, timer = 0, cool = 6;   /* 0 none, 1 follow, 2 seek, 3 punch */
+
+    for (let i=1; i<=n; i++){
+      /* containment (strongest) */
+      const dx = pos.x-cx, dy = pos.y-cy, d = Math.hypot(dx,dy);
+      if (d > maxR){
+        const toC = Math.atan2(-dy,-dx);
+        heading = lerpAngle(heading, toC, clamp((d-maxR)/(S*0.06),0,1)*0.28);
+      }
+      if (cool > 0) cool--;
+      const near = nearestTube(pos, armId, i, sense);
+      /* mode entry */
+      if (mode === 0 && cool === 0 && near){
+        if (rng() < P.follow*0.10){ mode = 1; timer = Math.round(lerp(25,90,rng())); }
+        else if (rng() < P.cross*0.06){ mode = 2; timer = 60; }
+      }
+      /* mode steering */
+      if (mode === 1){
+        if (!near){ mode = 0; cool = 10; }
+        else {
+          const q = near.q, dirN = Math.atan2(q.y-pos.y, q.x-pos.x);
+          let t = q.t; if (Math.cos(heading - t) < 0) t += Math.PI;
+          const err = (near.d - gap)/gap;
+          const target = err > 0
+            ? lerpAngle(t, dirN, clamp(err,0,0.6))
+            : lerpAngle(t, dirN+Math.PI, clamp(-err,0,0.6));
+          heading = lerpAngle(heading, target, 0.4);
+          if (--timer <= 0){ mode = 0; cool = 20; }
+        }
+      } else if (mode === 2){
+        if (!near){ mode = 0; cool = 10; }
+        else {
+          const q = near.q, dirN = Math.atan2(q.y-pos.y, q.x-pos.x);
+          let perp = q.t + Math.PI/2;
+          if (Math.cos(perp - dirN) < 0) perp += Math.PI;
+          heading = lerpAngle(heading, perp, 0.35);
+          if (near.d < wpx*0.8){ mode = 3; timer = Math.ceil((wpx*2.8+gap)/step); }
+          else if (--timer <= 0){ mode = 0; cool = 15; }
+        }
+      } else if (mode === 3){
+        if (--timer <= 0){ mode = 0; cool = 18; }
+      }
+      /* base curvature, damped while in a behavior */
+      const damp = (mode===1||mode===3) ? 0.15 : (mode===2 ? 0.3 : 1);
+      heading += (noise(nOff + i*0.13)-0.5)*2 * P.wiggle * (1-P.rect) * damp;
+      if (P.rect > 0.001){
+        heading = lerpAngle(heading, snap90(heading), P.rect*0.38*Math.max(damp,0.5));
+        if (mode === 0 && i % turnEvery === 0 && rng() < 0.85*P.rect)
+          heading += (rng()<0.5?1:-1) * (Math.PI/2) * (0.9+rng()*0.2);
+      }
+      /* gentle default avoidance so tubes don't graze mushily */
+      if (mode === 0 && near && near.d < gap*0.8 && cool === 0){
+        const away = Math.atan2(pos.y-near.q.y, pos.x-near.q.x);
+        heading = lerpAngle(heading, away, 0.15);
+      }
+      pos = {x: pos.x + Math.cos(heading)*step, y: pos.y + Math.sin(heading)*step};
+      pts.push({x:pos.x, y:pos.y});
+      insertPt(pos, armId, i, heading);
+      /* branching */
+      if (depth < 2 && i > n*0.30 && i < n*0.85 && rng() < (P.branchChance*1.6)/n){
+        const side = rng()<0.5 ? -1 : 1;
+        const childLen = (n-i)*step * lerp(0.5, 0.85, rng());
+        out.push.apply(out, grow(heading + side*lerp(0.55,1.15,rng()), depth+1, {x:pos.x,y:pos.y}, childLen));
+      }
+    }
+    /* tip variant */
+    let bulb = 0;
+    const tr = rng();
+    const doCurl = tr < P.curlChance;
+    const doHook = !doCurl && tr < P.curlChance + P.hookChance;
+    const doBulb = !doCurl && !doHook && tr < P.curlChance + P.hookChance + P.bulbChance;
+    if (doCurl || doHook){
+      const sign = rng()<0.5 ? -1 : 1;
+      const turns = doHook ? lerp(0.28,0.48,rng()) : P.curlTurns*(0.7+rng()*0.6);
+      const total = turns * TAU;
+      const rMul = doHook ? 4.0 : 3.0;
+      let k = 0, cs = step, h = heading;
+      while (k < total){
+        const prog = k/total;
+        const inc = clamp(cs / Math.max(cs*1.2, (rMul - prog*1.85) * wpx), 0.06, 0.55);
+        h += sign*inc; k += inc; cs *= 0.997;
+        pos = {x: pos.x + Math.cos(h)*cs, y: pos.y + Math.sin(h)*cs};
+        pts.push({x:pos.x, y:pos.y});
+      }
+    } else if (doBulb){
+      bulb = wpx * lerp(0.85, 1.35, rng());
+    }
+    out.unshift({pts:pts, bulb:bulb, tipDir:heading});
+    return out;
+  }
+
+  /* grow one wedge, copy around */
+  const baseCount = Math.max(1, Math.ceil(P.arms / symN));
+  const wedge = TAU / symN;
+  const wedgeArms = [];
+  for (let i=0; i<baseCount; i++){
+    const a0 = -Math.PI/2 + (i + 0.5)/baseCount * wedge + (rng()-0.5)*0.4;
+    wedgeArms.push.apply(wedgeArms, grow(a0, 0, null, null));
+  }
+
+  let arms = [];
+  for (let c=0; c<symN; c++){
+    const rot = c*wedge, cosr = Math.cos(rot), sinr = Math.sin(rot);
+    const jitterAmp = (1-P.symStr) * S * 0.05;
+    const jn = makeNoise(mulberry32(seed*31 + c*7 + 5));
+    for (const a of wedgeArms){
+      const pts = a.pts.map((p,idx) => {
+        const x0 = p.x-cx, y0 = p.y-cy;
+        let x = cx + x0*cosr - y0*sinr, y = cy + x0*sinr + y0*cosr;
+        if (c>0 && jitterAmp>0){
+          x += (jn(idx*0.05)-0.5)*2*jitterAmp;
+          y += (jn(idx*0.05+300)-0.5)*2*jitterAmp;
+        }
+        return {x:x, y:y};
+      });
+      arms.push({pts:pts, bulb:a.bulb, tipDir:a.tipDir + rot});
+    }
+  }
+
+  /* hand wobble */
+  const wobAmp = P.wobble * S * 0.012;
+  arms.forEach((a,ai) => {
+    const wn = makeNoise(mulberry32(seed*97 + ai*13 + 2));
+    a.pts = a.pts.map((p,i) => ({
+      x: p.x + (wn(i*0.07)-0.5)*2*wobAmp,
+      y: p.y + (wn(i*0.07+555)-0.5)*2*wobAmp
+    }));
+  });
+
+  /* pass-1 depth order */
+  arms.forEach(a => a.depth = rng());
+  arms.sort((a,b) => a.depth - b.depth);
+
+  /* ---------- crossings on final geometry ---------- */
+  const hw0 = Math.ceil(wpx*1.6/step) + 2;
+  const minSelf = Math.ceil(wpx*3/step) + 4;
+  const c2 = Math.max(step*2.5, wpx*1.2);
+  const segHash = new Map();
+  const skey = (x,y) => ((x/c2)|0) + ':' + ((y/c2)|0);
+  arms.forEach((a,ai) => {
+    for (let i=0; i<a.pts.length-1; i++){
+      const mx = (a.pts[i].x + a.pts[i+1].x)/2, my = (a.pts[i].y + a.pts[i+1].y)/2;
+      const k = skey(mx,my);
+      let l = segHash.get(k);
+      if (!l){ l = []; segHash.set(k, l); }
+      l.push([ai, i]);
+    }
+  });
+  function segInt(p1,p2,p3,p4){
+    const d1x=p2.x-p1.x, d1y=p2.y-p1.y, d2x=p4.x-p3.x, d2y=p4.y-p3.y;
+    const den = d1x*d2y - d1y*d2x;
+    if (Math.abs(den) < 1e-9) return null;
+    const t = ((p3.x-p1.x)*d2y - (p3.y-p1.y)*d2x)/den;
+    const u = ((p3.x-p1.x)*d1y - (p3.y-p1.y)*d1x)/den;
+    if (t<0||t>1||u<0||u>1) return null;
+    return {ang: Math.abs(Math.sin(Math.atan2(d1y,d1x) - Math.atan2(d2y,d2x)))};
+  }
+  const raw = [];
+  for (const [k, list] of segHash){
+    const [cxk, cyk] = k.split(':').map(Number);
+    for (const [ai, i] of list){
+      for (let dx=0; dx<=1; dx++) for (let dy=-1; dy<=1; dy++){
+        if (dx===0 && dy<0) continue;
+        const l2 = segHash.get((cxk+dx)+':'+(cyk+dy));
+        if (!l2) continue;
+        for (const [bi, j] of l2){
+          if (bi < ai) continue;
+          if (bi === ai && (j <= i + minSelf)) continue;
+          if (dx===0 && dy===0 && (bi===ai ? j<=i : bi===ai)) { /* same-cell dedupe below */ }
+          if (dx===0 && dy===0 && bi===ai && j<=i) continue;
+          if (dx===0 && dy===0 && bi<ai) continue;
+          const A = arms[ai].pts, B = arms[bi].pts;
+          const hit = segInt(A[i],A[i+1],B[j],B[j+1]);
+          if (hit) raw.push({a:ai, ia:i, b:bi, ib:j, ang:hit.ang});
+        }
+      }
+    }
+  }
+  /* dedupe clustered hits */
+  raw.sort((p,q) => (p.a-q.a) || (p.b-q.b) || (p.ia-q.ia));
+  const crossings = [];
+  for (const r of raw){
+    let dup = false;
+    for (let k=crossings.length-1; k>=0; k--){
+      const c = crossings[k];
+      if (c.a !== r.a || c.b !== r.b) break;
+      if (Math.abs(c.ia-r.ia) < hw0*2 && Math.abs(c.ib-r.ib) < hw0*2){ dup = true; break; }
+    }
+    if (!dup) crossings.push(r);
+  }
+  /* choose winners -> redraw windows */
+  const winByArm = new Map();
+  function addWin(ai, center, hw){
+    const a = arms[ai];
+    const lo = Math.max(0, center-hw), hi = Math.min(a.pts.length-1, center+hw);
+    let l = winByArm.get(ai);
+    if (!l){ l = []; winByArm.set(ai, l); }
+    l.push([lo,hi]);
+  }
+  for (const c of crossings){
+    const hw = Math.min(hw0*3, Math.round(hw0/Math.max(0.34, c.ang)));
+    if (c.a === c.b){
+      addWin(c.a, rng()<0.5 ? c.ia : c.ib, hw);          /* self-cross: always resolve */
+    } else {
+      /* natural top = later-drawn (higher index). flip with prob weave*0.5 */
+      if (rng() < P.weave*0.5) addWin(c.a, c.ia, hw);    /* put the under arm on top */
+    }
+  }
+  /* merge intervals per arm, margin-extend to keep window ends clear of crossings */
+  const windows = [];
+  for (const [ai, list] of winByArm){
+    list.sort((p,q) => p[0]-q[0]);
+    const merged = [];
+    for (const iv of list){
+      const last = merged[merged.length-1];
+      if (last && iv[0] <= last[1] + hw0) last[1] = Math.max(last[1], iv[1]);
+      else merged.push([iv[0], iv[1]]);
+    }
+    const armXs = crossings.filter(c => c.a===ai || c.b===ai)
+      .flatMap(c => [c.a===ai ? c.ia : null, c.b===ai ? c.ib : null].filter(v => v!=null));
+    for (const iv of merged){
+      for (let pass=0; pass<3; pass++){
+        for (const x of armXs){
+          if (x < iv[0] && iv[0]-x < hw0) iv[0] = Math.max(0, x-hw0);
+          if (x > iv[1] && x-iv[1] < hw0) iv[1] = Math.min(arms[ai].pts.length-1, x+hw0);
+        }
+      }
+      windows.push({ai:ai, lo:iv[0], hi:iv[1], ord:rng()});
+    }
+  }
+  windows.sort((p,q) => p.ord - q.ord);
+
+  /* smooth irregular body: low harmonics only, never jagged */
+  const harm = [];
+  for (let k=1; k<=3; k++)
+    harm.push({a: lerp(0.02, 0.10 - k*0.022, rng()), p: rng()*TAU});
+
+  return {arms:arms, windows:windows, harm:harm, cx:cx, cy:cy, bodyR:bodyR, wpx:wpx, seed:seed};
+}
+
+/* ---------- render ---------- */
+function paint(ctx, S){
+  const m = buildSquig(S);
+  const paper = '#faf7f0';
+  const ink = val('in-ink');
+  const ow = Math.max(1.1, S*0.0032*P.outline);
+
+  ctx.fillStyle = paper;
+  ctx.fillRect(0,0,S,S);
+  ctx.lineJoin = 'round';
+
+  const trace = (pts, lo, hi) => {
+    ctx.beginPath();
+    ctx.moveTo(pts[lo].x, pts[lo].y);
+    for (let i=lo+1; i<=hi; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  };
+  const bulbAt = a => {
+    if (!a.bulb) return;
+    const p = a.pts[a.pts.length-1];
+    const bx = p.x + Math.cos(a.tipDir)*a.bulb*0.45;
+    const by = p.y + Math.sin(a.tipDir)*a.bulb*0.45;
+    ctx.beginPath(); ctx.arc(bx, by, a.bulb + ow, 0, TAU);
+    ctx.fillStyle = ink; ctx.fill();
+    ctx.beginPath(); ctx.arc(bx, by, a.bulb - ow*0.15, 0, TAU);
+    ctx.fillStyle = paper; ctx.fill();
+  };
+
+  /* pass 1: whole continuous arms, casing + core */
+  ctx.lineCap = 'round';
+  for (const a of m.arms){
+    const n = a.pts.length-1;
+    trace(a.pts, 0, n);
+    ctx.strokeStyle = ink; ctx.lineWidth = m.wpx + ow*2; ctx.stroke();
+    bulbAt(a);
+    trace(a.pts, 0, n);
+    ctx.strokeStyle = paper; ctx.lineWidth = m.wpx; ctx.stroke();
+    /* re-clear bulb interior over the core stroke seam */
+    if (a.bulb){
+      const p = a.pts[a.pts.length-1];
+      const bx = p.x + Math.cos(a.tipDir)*a.bulb*0.45;
+      const by = p.y + Math.sin(a.tipDir)*a.bulb*0.45;
+      ctx.beginPath(); ctx.arc(bx, by, a.bulb - ow*0.15, 0, TAU);
+      ctx.fillStyle = paper; ctx.fill();
+    }
+  }
+
+  /* pass 2: over/under windows — butt-cap ink, round-cap paper so seams vanish */
+  for (const w of m.windows){
+    const pts = m.arms[w.ai].pts;
+    trace(pts, w.lo, w.hi);
+    ctx.lineCap = 'butt';
+    ctx.strokeStyle = ink; ctx.lineWidth = m.wpx + ow*2; ctx.stroke();
+    trace(pts, w.lo, w.hi);
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = paper; ctx.lineWidth = m.wpx; ctx.stroke();
+  }
+
+  /* body: harmonic radius — smooth by construction */
+  const solid = document.getElementById('in-solid').checked;
+  ctx.beginPath();
+  const N = 96;
+  for (let i=0; i<=N; i++){
+    const t = i/N*TAU;
+    let r = 1;
+    for (let k=0; k<m.harm.length; k++) r += m.harm[k].a * Math.cos((k+1)*t + m.harm[k].p);
+    const x = m.cx + Math.cos(t)*m.bodyR*r, y = m.cy + Math.sin(t)*m.bodyR*r;
+    if (i) ctx.lineTo(x,y); else ctx.moveTo(x,y);
+  }
+  ctx.closePath();
+  ctx.fillStyle = solid ? ink : paper;
+  ctx.fill();
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = ow*2;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+}
+
+/* ---------- wiring ---------- */
+const cv = document.getElementById('cv');
+function draw(){
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = cv.clientWidth || 600;
+  const S = Math.round(w * dpr);
+  if (cv.width !== S){ cv.width = S; cv.height = S; }
+  paint(cv.getContext('2d'), S);
+}
+
+function reseed(){
+  document.getElementById('seed').value = Math.floor(Math.random()*99999);
+  draw();
+}
+function surprise(){
+  const R = Math.random;
+  const set = (k,v) => {
+    P[k] = v;
+    document.getElementById('in-'+k).value = v;
+    document.getElementById('out-'+k).textContent = fmt(v);
+  };
+  set('arms', 2+Math.floor(R()*8));
+  set('armLen', +lerp(0.22,0.8,R()).toFixed(2));
+  set('lenVar', +(R()*0.7).toFixed(2));
+  set('armW', +lerp(0.01,0.045,R()).toFixed(3));
+  set('compact', +R().toFixed(2));
+  set('rect', +((R()<0.45 ? R() : R()*0.25)).toFixed(2));
+  set('turnFreq', +R().toFixed(2));
+  set('wiggle', +lerp(0.08,0.42,R()).toFixed(2));
+  set('follow', +R().toFixed(2));
+  set('cross', +R().toFixed(2));
+  set('curlChance', +(R()*0.7).toFixed(2));
+  set('curlTurns', +lerp(0.5,2.2,R()).toFixed(2));
+  set('hookChance', +(R()*0.5).toFixed(2));
+  set('bulbChance', +(R()*0.4).toFixed(2));
+  set('branchChance', +(R()*0.7).toFixed(2));
+  set('symStr', +lerp(0.5,1,R()).toFixed(2));
+  set('wobble', +lerp(0.2,0.8,R()).toFixed(2));
+  set('weave', +lerp(0.3,1,R()).toFixed(2));
+  document.getElementById('in-symN').value = R()<0.55 ? '1' : String(2+Math.floor(R()*5));
+  reseed();
+}
+function savePng(){
+  const EX = 1800;
+  const off = document.createElement('canvas');
+  off.width = EX; off.height = EX;
+  paint(off.getContext('2d'), EX);
+  const a = document.createElement('a');
+  a.download = 'squig-' + val('seed') + '.png';
+  a.href = off.toDataURL('image/png');
+  a.click();
+}
+
+buildControls();
+document.getElementById('btnNew').addEventListener('click', reseed);
+document.getElementById('btnWild').addEventListener('click', surprise);
+document.getElementById('btnPng').addEventListener('click', savePng);
+document.getElementById('btnReroll').addEventListener('click', reseed);
+document.getElementById('seed').addEventListener('input', draw);
+cv.addEventListener('click', reseed);
+window.addEventListener('resize', draw);
+draw();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Finn Mulligan</title>
+<meta name="description" content="Small closed systems, mostly. Projects, writing, and terrariums by Finn Mulligan.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <h1>Finn Mulligan</h1>
+    <p class="standfirst">Small closed systems, mostly. A catalog of things I&rsquo;ve built, written, and grown.</p>
+    <p class="contact">
+      <a href="mailto:finnmulligan55@gmail.com">finnmulligan55@gmail.com</a>
+      <span aria-hidden="true">/</span>
+      <a href="https://github.com/">GitHub</a>
+      <span aria-hidden="true">/</span>
+      <a href="#">LinkedIn</a>
+    </p>
+  </header>
+
+  <canvas class="automaton" id="automaton" aria-hidden="true"></canvas>
+  <p class="automaton-caption">Rule 110 &mdash; one row per frame, seeded on load</p>
+
+  <main>
+    <ul class="grid">
+
+      <li><a class="specimen" href="borgle/">
+        <span class="kind">Playable</span>
+        <h2>Borgle</h2>
+        <p>A Boggle implementation. Dice-accurate letter distribution, a real dictionary, and a solver that finds every word on the board so you can see what you missed.</p>
+        <span class="year">2026</span>
+      </a></li>
+
+      <li><a class="specimen" href="automata/">
+        <span class="kind">Interactive</span>
+        <h2>Cellular Automata</h2>
+        <p>Elementary automata and life-like rules, running live. A few of the 256 elementary rules do something genuinely strange and it is hard to stop watching.</p>
+        <span class="year">2025&ndash;2026</span>
+      </a></li>
+
+      <li><a class="specimen" href="squigs/">
+        <span class="kind">Interactive</span>
+        <h2>Squigs</h2>
+        <p>A doodle generator. Feeds a small set of stroke rules with noise and lets them wander until the result looks drawn rather than plotted.</p>
+        <span class="year">2026</span>
+      </a></li>
+
+      <li><a class="specimen" href="sketches/">
+        <span class="kind">Sketchbook</span>
+        <h2>p5 Sketches</h2>
+        <p>Early explorations from when I was first working out what these tools could do. Kept as they were, mistakes included.</p>
+        <span class="year">2021&ndash;2023</span>
+      </a></li>
+
+      <li><a class="specimen" href="terrarium/">
+        <span class="kind">Photographs</span>
+        <h2>Terrariums</h2>
+        <p>Sealed glass ecosystems, some running for years without opening. The subject of an ongoing sensing project, but mostly just nice to look at.</p>
+        <span class="year">Ongoing</span>
+      </a></li>
+
+      <li><a class="specimen" href="writing/">
+        <span class="kind">Writing</span>
+        <h2>Essays &amp; Chapters</h2>
+        <p>A philosophy essay on healthcare, and a forthcoming book chapter on generative AI in interdisciplinary research design.</p>
+        <span class="year">2024&ndash;2026</span>
+      </a></li>
+
+    </ul>
+  </main>
+
+  <footer>Finn Mulligan &middot; New York</footer>
+
+</div>
+
+<script>
+/* ---------------------------------------------------------------
+   Masthead: Rule 110, one generation per frame, scrolling upward.
+   Freezes to a single static field if reduced motion is requested.
+----------------------------------------------------------------*/
+(function () {
+  var canvas = document.getElementById('automaton');
+  if (!canvas) return;
+  var ctx = canvas.getContext('2d');
+
+  var CELL = 3;
+  var RULE = 110;
+  var cols, rows, cells, history, dpr;
+
+  function ruleBit(l, c, r) {
+    return (RULE >> ((l << 2) | (c << 1) | r)) & 1;
+  }
+
+  function setup() {
+    dpr = window.devicePixelRatio || 1;
+    var w = canvas.clientWidth;
+    var h = canvas.clientHeight;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    cols = Math.ceil(w / CELL);
+    rows = Math.ceil(h / CELL);
+
+    cells = new Uint8Array(cols);
+    for (var i = 0; i < cols; i++) cells[i] = Math.random() < 0.28 ? 1 : 0;
+
+    history = [];
+  }
+
+  function step() {
+    var next = new Uint8Array(cols);
+    for (var i = 0; i < cols; i++) {
+      var l = cells[(i - 1 + cols) % cols];
+      var c = cells[i];
+      var r = cells[(i + 1) % cols];
+      next[i] = ruleBit(l, c, r);
+    }
+    cells = next;
+    history.push(cells);
+    if (history.length > rows) history.shift();
+  }
+
+  function draw() {
+    var w = canvas.clientWidth;
+    var h = canvas.clientHeight;
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = '#3E6B52';
+    for (var y = 0; y < history.length; y++) {
+      var row = history[y];
+      var py = h - (history.length - y) * CELL;
+      for (var x = 0; x < cols; x++) {
+        if (row[x]) ctx.fillRect(x * CELL, py, CELL - 1, CELL - 1);
+      }
+    }
+  }
+
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  setup();
+
+  if (reduced) {
+    for (var i = 0; i < rows; i++) step();
+    draw();
+    return;
+  }
+
+  var last = 0;
+  function frame(t) {
+    if (t - last > 55) { step(); draw(); last = t; }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  var resizeTimer;
+  window.addEventListener('resize', function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () { setup(); }, 180);
+  });
+})();
+</script>
+</body>
+</html>
