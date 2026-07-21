@@ -5,11 +5,95 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/addons/p5.sound.min.js"></script>
     <link rel="stylesheet" type="text/css" href="style.css">
     <meta charset="utf-8" />
-
+    <style>
+      #sk-bar {
+        position: fixed; bottom: 0; left: 0; right: 0; z-index: 9999;
+        display: flex; align-items: center; gap: 12px;
+        padding: 10px 18px;
+        background: linear-gradient(to top, rgba(10,10,14,0.92) 0%, rgba(10,10,14,0.7) 70%, transparent 100%);
+        font-family: "JetBrains Mono", "IBM Plex Mono", ui-monospace, monospace;
+        font-size: 11px;
+        color: rgba(255,255,255,0.45);
+        backdrop-filter: blur(4px);
+        pointer-events: none;
+      }
+      #sk-bar a, #sk-bar button {
+        pointer-events: all;
+      }
+      #sk-back {
+        color: rgba(255,255,255,0.55);
+        text-decoration: none;
+        letter-spacing: 0.05em;
+        white-space: nowrap;
+        transition: color 0.15s;
+      }
+      #sk-back:hover { color: rgba(255,255,255,0.9); }
+      #sk-sep { color: rgba(255,255,255,0.15); margin: 0 2px; }
+      #sk-title {
+        font-weight: 600;
+        color: rgba(255,255,255,0.7);
+        white-space: nowrap;
+      }
+      #sk-desc {
+        flex: 1;
+        color: rgba(255,255,255,0.35);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #sk-hint {
+        color: rgba(255,255,255,0.3);
+        white-space: nowrap;
+        font-size: 10px;
+        letter-spacing: 0.04em;
+      }
+      .sk-btn {
+        background: rgba(255,255,255,0.07);
+        border: 1px solid rgba(255,255,255,0.15);
+        color: rgba(255,255,255,0.6);
+        font-family: inherit;
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 5px 11px;
+        border-radius: 4px;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background 0.15s, border-color 0.15s, color 0.15s;
+      }
+      .sk-btn:hover {
+        background: rgba(255,255,255,0.14);
+        border-color: rgba(255,255,255,0.3);
+        color: rgba(255,255,255,0.9);
+      }
+    </style>
   </head>
   <body>
-    <main>
-    </main>
+    <main></main>
     <script src="sketch.js"></script>
+    <div id="sk-bar">
+      <a id="sk-back" href="../">&#8592; Sketches</a>
+      <span id="sk-sep">·</span>
+      <span id="sk-title">Sphere Cluster</span>
+      <span id="sk-sep">·</span>
+      <span id="sk-desc">Six spheres of varying radius loosely arranged in space. A more relaxed take on the orbiting sketch.</span>
+      <button class="sk-btn" id="sk-pp">Pause</button>
+      <button class="sk-btn" id="sk-restart">Restart</button>
+    </div>
+    <script>
+    window.addEventListener('load', function () {
+      var pp = document.getElementById('sk-pp');
+      pp.addEventListener('click', function () {
+        if (typeof isLooping === 'function' && isLooping()) {
+          noLoop(); pp.textContent = 'Play';
+        } else {
+          loop(); pp.textContent = 'Pause';
+        }
+      });
+      document.getElementById('sk-restart').addEventListener('click', function () {
+        location.reload();
+      });
+    });
+    </script>
   </body>
 </html>

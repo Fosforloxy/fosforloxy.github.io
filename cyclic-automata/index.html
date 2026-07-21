@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cyclic³ — 3D Cellular Automata</title>
+<style>* { margin: 0; padding: 0; box-sizing: border-box; } body { overflow: hidden; background: #06080e; }</style>
+</head>
+<body>
+<div id="root"></div>
+<a href="../" style="position:fixed;top:20px;right:24px;z-index:9999;font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#334455;text-decoration:none;transition:color 0.15s;" onmouseover="this.style.color='#33ddff'" onmouseout="this.style.color='#334455'">&#8592; Catalog</a>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+
+// --- N-State Cyclic 3D Cellular Automata ---
+function idx(x, y, z, size) {
+  return x + y * size + z * size * size;
+}
+
+function createGrid(size) {
+  return new Uint8Array(size * size * size);
+}
+
+function randomize(grid, size, numStates, density = 0.35) {
+  for (let i = 0; i < grid.length; i++) {
+    grid[i] = Math.random() < density ? Math.floor(Math.random() * numStates) + 1 : 0;
+  }
+  return grid;
+}
+
+function getPredator(state, numStates) {
+  if (state === 0) return 0;
+  return (state % numStates) + 1;
+}
+
+function countNeighborStates(grid, x, y, z, size, neighborhood, numStates) {
+  const counts = new Uint16Array(numStates + 1);
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dz = -1; dz <= 1; dz++) {
+        if (dx === 0 && dy === 0 && dz === 0) continue;
+        if (neighborhood === "vonneumann" && Math.abs(dx) + Math.abs(dy) + Math.abs(dz) > 1) continue;
+        const nx = (x + dx + size) % size;
+        const ny = (y + dy + size) % size;
+        const nz = (z + dz + size) % size;
+        counts[grid[idx(nx, ny, nz, size)]]++;
+      }
+    }
+  }
+  return counts;
+}
+
+function step(grid, size, threshold, neighborhood, numStates) {
+  const next = new Uint8Array(grid.length);
+  for (let x = 0; x < size; x++) {
+    for (let y = 0; y < size; y++) {
+      for (let z = 0; z < size; z++) {
+        const i = idx(x, y, z, size);
+        const cell = grid[i];
+        const counts = countNeighborStates(grid, x, y, z, size, neighborhood, numStates);
+        if (cell === 0) {
+          let maxState = 0, maxCount = 0;
+          for (let s = 1; s <= numStates; s++) {
+            if (counts[s] > maxCount) { maxCount = counts[s]; maxState = s; }
+          }
+          next[i] = maxCount >= threshold ? maxState : 0;
+        } else {
+          const predator = getPredator(cell, numStates);
+          next[i] = counts[predator] >= threshold ? predator : cell;
+        }
+      }
+    }
+  }
+  return next;
+}
+
+// --- Simple Orbit Controls ---
+class SimpleOrbitControls {
+  constructor(camera, domElement) {
+    this.camera = camera;
+    this.domElement = domElement;
+    this.target = new THREE.Vector3(0, 0, 0);
+    this.spherical = new THREE.Spherical();
+    this.sphericalDelta = new THREE.Spherical();
+    this.rotateSpeed = 0.8;
+    this.zoomSpeed = 1.2;
+    this.isPointerDown = false;
+    this.pointerStart = { x: 0, y: 0 };
+    this.autoRotateSpeed = 0.3;
+    this.autoRotate = true;
+    this.minDistance = 5;
+    this.maxDistance = 80;
+    const offset = new THREE.Vector3().copy(camera.position).sub(this.target);
+    this.spherical.setFromVector3(offset);
+    this._onPointerDown = this._onPointerDown.bind(this);
+    this._onPointerMove = this._onPointerMove.bind(this);
+    this._onPointerUp = this._onPointerUp.bind(this);
+    this._onWheel = this._onWheel.bind(this);
+    domElement.addEventListener("pointerdown", this._onPointerDown);
+    domElement.addEventListener("pointermove", this._onPointerMove);
+    domElement.addEventListener("pointerup", this._onPointerUp);
+    domElement.addEventListener("pointerleave", this._onPointerUp);
+    domElement.addEventListener("wheel", this._onWheel, { passive: false });
+  }
+  _onPointerDown(e) { this.isPointerDown = true; this.pointerStart.x = e.clientX; this.pointerStart.y = e.clientY; }
+  _onPointerMove(e) {
+    if (!this.isPointerDown) return;
+    this.sphericalDelta.theta -= (e.clientX - this.pointerStart.x) * 0.005 * this.rotateSpeed;
+    this.sphericalDelta.phi -= (e.clientY - this.pointerStart.y) * 0.005 * this.rotateSpeed;
+    this.pointerStart.x = e.clientX; this.pointerStart.y = e.clientY;
+  }
+  _onPointerUp() { this.isPointerDown = false; }
+  _onWheel(e) {
+    e.preventDefault();
+    this.spherical.radius *= e.deltaY > 0 ? (1 + 0.05 * this.zoomSpeed) : (1 - 0.05 * this.zoomSpeed);
+    this.spherical.radius = Math.max(this.minDistance, Math.min(this.maxDistance, this.spherical.radius));
+  }
+  update() {
+    if (this.autoRotate && !this.isPointerDown) this.sphericalDelta.theta -= 0.001 * this.autoRotateSpeed;
+    this.spherical.theta += this.sphericalDelta.theta;
+    this.spherical.phi += this.sphericalDelta.phi;
+    this.spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, this.spherical.phi));
+    this.sphericalDelta.theta *= 0.85;
+    this.sphericalDelta.phi *= 0.85;
+    const offset = new THREE.Vector3().setFromSpherical(this.spherical);
+    this.camera.position.copy(this.target).add(offset);
+    this.camera.lookAt(this.target);
+  }
+  dispose() {
+    this.domElement.removeEventListener("pointerdown", this._onPointerDown);
+    this.domElement.removeEventListener("pointermove", this._onPointerMove);
+    this.domElement.removeEventListener("pointerup", this._onPointerUp);
+    this.domElement.removeEventListener("pointerleave", this._onPointerUp);
+    this.domElement.removeEventListener("wheel", this._onWheel);
+  }
+}
+
+// --- Generate N evenly-spaced hues ---
+function generatePalette(n) {
+  const cols = [];
+  for (let i = 0; i < n; i++) {
+    const hue = (i / n) * 360;
+    const sat = 85 + (i % 3) * 5;
+    const lit = 55 + (i % 2) * 10;
+    cols.push(`hsl(${hue}, ${sat}%, ${lit}%)`);
+  }
+  return cols;
+}
+
+const THEMES = {
+  "Neon Triad": { bg: "#06080e", ui: "#33ddff" },
+  "Plasma": { bg: "#080410", ui: "#aa00ff" },
+  "Retro CRT": { bg: "#0a0a0f", ui: "#4488ff" },
+  "Toxic": { bg: "#050a04", ui: "#66ff00" },
+  "Ice & Fire": { bg: "#040810", ui: "#0088ff" },
+};
+
+const NEIGHBORHOODS = ["moore", "vonneumann"];
+
+function RPS3D() {
+  const mountRef = useRef(null);
+  const rendererRef = useRef(null);
+  const sceneRef = useRef(null);
+  const cameraRef = useRef(null);
+  const controlsRef = useRef(null);
+  const gridRef = useRef(null);
+  const meshesRef = useRef({});
+  const animFrameRef = useRef(null);
+  const lastStepRef = useRef(0);
+
+  const [playing, setPlaying] = useState(false);
+  const [gridSize, setGridSize] = useState(16);
+  const [speed, setSpeed] = useState(180);
+  const [generation, setGeneration] = useState(0);
+  const [counts, setCounts] = useState({});
+  const [theme, setTheme] = useState("Neon Triad");
+  const [density, setDensity] = useState(0.35);
+  const [threshold, setThreshold] = useState(3);
+  const [neighborhood, setNeighborhood] = useState("moore");
+  const [autoRotate, setAutoRotate] = useState(true);
+  const [showBounds, setShowBounds] = useState(true);
+  const [cubeShape, setCubeShape] = useState("cube");
+  const [numStates, setNumStates] = useState(3);
+  const [hiddenStates, setHiddenStates] = useState(new Set());
+
+  const playingRef = useRef(playing);
+  const speedRef = useRef(speed);
+  const thresholdRef = useRef(threshold);
+  const neighborhoodRef = useRef(neighborhood);
+  const sizeRef = useRef(gridSize);
+  const numStatesRef = useRef(numStates);
+  const hiddenStatesRef = useRef(hiddenStates);
+
+  useEffect(() => { playingRef.current = playing; }, [playing]);
+  useEffect(() => { speedRef.current = speed; }, [speed]);
+  useEffect(() => { thresholdRef.current = threshold; }, [threshold]);
+  useEffect(() => { neighborhoodRef.current = neighborhood; }, [neighborhood]);
+  useEffect(() => { sizeRef.current = gridSize; }, [gridSize]);
+  useEffect(() => { numStatesRef.current = numStates; }, [numStates]);
+  useEffect(() => { hiddenStatesRef.current = hiddenStates; }, [hiddenStates]);
+
+  const colors = THEMES[theme];
+  const statePalette = generatePalette(numStates);
+
+  const getCellGeometry = useCallback((shape) => {
+    switch (shape) {
+      case "sphere": return new THREE.SphereGeometry(0.5, 8, 8);
+      case "diamond": return new THREE.OctahedronGeometry(0.55);
+      default: return new THREE.BoxGeometry(1, 1, 1); // Full size = no gaps
+    }
+  }, []);
+
+  const updateInstances = useCallback((grid, size, meshMap, hidden) => {
+    const dummy = new THREE.Object3D();
+    const half = size / 2;
+    const ns = numStatesRef.current;
+    const instanceCounts = {};
+    for (let s = 1; s <= ns; s++) instanceCounts[s] = 0;
+
+    for (let i = 0; i < grid.length; i++) {
+      const s = grid[i];
+      if (s > 0 && s <= ns) instanceCounts[s]++;
+    }
+
+    const indices = {};
+    for (let s = 1; s <= ns; s++) indices[s] = 0;
+
+    for (let x = 0; x < size; x++) {
+      for (let y = 0; y < size; y++) {
+        for (let z = 0; z < size; z++) {
+          const s = grid[idx(x, y, z, size)];
+          if (s > 0 && s <= ns && meshMap[s]) {
+            dummy.position.set(x - half + 0.5, y - half + 0.5, z - half + 0.5);
+            dummy.updateMatrix();
+            meshMap[s].setMatrixAt(indices[s], dummy.matrix);
+            indices[s]++;
+          }
+        }
+      }
+    }
+
+    const h = hidden || hiddenStatesRef.current;
+    for (let s = 1; s <= ns; s++) {
+      if (meshMap[s]) {
+        meshMap[s].count = h.has(s) ? 0 : instanceCounts[s];
+        meshMap[s].instanceMatrix.needsUpdate = true;
+      }
+    }
+
+    setCounts({ ...instanceCounts });
+  }, []);
+
+  const initScene = useCallback(() => {
+    if (!mountRef.current) return;
+
+    if (rendererRef.current) {
+      rendererRef.current.dispose();
+      if (rendererRef.current.domElement.parentNode)
+        rendererRef.current.domElement.parentNode.removeChild(rendererRef.current.domElement);
+    }
+    if (controlsRef.current) controlsRef.current.dispose();
+    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+
+    const w = mountRef.current.clientWidth;
+    const h = mountRef.current.clientHeight;
+
+    const scene = new THREE.Scene();
+    sceneRef.current = scene;
+
+    const camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 200);
+    camera.position.set(gridSize * 1.5, gridSize * 1.1, gridSize * 1.5);
+    cameraRef.current = camera;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(w, h);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(new THREE.Color(colors.bg), 1);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.3;
+    mountRef.current.appendChild(renderer.domElement);
+    rendererRef.current = renderer;
+
+    const controls = new SimpleOrbitControls(camera, renderer.domElement);
+    controls.autoRotate = autoRotate;
+    controlsRef.current = controls;
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.3));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.5);
+    dir.position.set(gridSize, gridSize * 2, gridSize);
+    scene.add(dir);
+
+    const pal = generatePalette(numStates);
+    for (let i = 0; i < Math.min(numStates, 4); i++) {
+      const p = new THREE.PointLight(new THREE.Color(pal[i]), 1.0, gridSize * 3);
+      const angle = (i / Math.min(numStates, 4)) * Math.PI * 2;
+      p.position.set(Math.cos(angle) * gridSize * 0.6, gridSize * 0.3, Math.sin(angle) * gridSize * 0.6);
+      scene.add(p);
+    }
+
+    if (showBounds) {
+      const boxGeo = new THREE.BoxGeometry(gridSize, gridSize, gridSize);
+      const edges = new THREE.EdgesGeometry(boxGeo);
+      const lineMat = new THREE.LineBasicMaterial({ color: new THREE.Color(colors.ui), transparent: true, opacity: 0.1 });
+      scene.add(new THREE.LineSegments(edges, lineMat));
+    }
+
+    const gh = new THREE.GridHelper(gridSize, gridSize, new THREE.Color(colors.ui), new THREE.Color(colors.ui));
+    gh.position.y = -gridSize / 2;
+    gh.material.transparent = true;
+    gh.material.opacity = 0.05;
+    scene.add(gh);
+
+    const grid = createGrid(gridSize);
+    randomize(grid, gridSize, numStates, density);
+    gridRef.current = grid;
+
+    const geo = getCellGeometry(cubeShape);
+    const maxInst = gridSize * gridSize * gridSize;
+    const meshMap = {};
+
+    for (let s = 1; s <= numStates; s++) {
+      const c = new THREE.Color(pal[s - 1]);
+      const mat = new THREE.MeshPhysicalMaterial({
+        color: c,
+        emissive: c,
+        emissiveIntensity: 0.4,
+        metalness: 0.15,
+        roughness: 0.35,
+        transparent: false,
+        clearcoat: 0.5,
+        clearcoatRoughness: 0.25,
+      });
+      const im = new THREE.InstancedMesh(geo, mat, maxInst);
+      im.count = 0;
+      scene.add(im);
+      meshMap[s] = im;
+    }
+    meshesRef.current = meshMap;
+
+    updateInstances(grid, gridSize, meshMap, hiddenStates);
+    setGeneration(0);
+
+    const animate = (time) => {
+      animFrameRef.current = requestAnimationFrame(animate);
+      controls.update();
+
+      if (playingRef.current && time - lastStepRef.current > speedRef.current) {
+        lastStepRef.current = time;
+        const s = sizeRef.current;
+        const ns = numStatesRef.current;
+        gridRef.current = step(gridRef.current, s, thresholdRef.current, neighborhoodRef.current, ns);
+        updateInstances(gridRef.current, s, meshMap, hiddenStatesRef.current);
+        setGeneration(g => g + 1);
+      }
+
+      renderer.render(scene, camera);
+    };
+    animate(0);
+  }, [gridSize, density, theme, showBounds, autoRotate, cubeShape, numStates, getCellGeometry, updateInstances]);
+
+  useEffect(() => {
+    setHiddenStates(new Set());
+    hiddenStatesRef.current = new Set();
+  }, [numStates]);
+
+  useEffect(() => {
+    initScene();
+    return () => {
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (controlsRef.current) controlsRef.current.dispose();
+      if (rendererRef.current) {
+        rendererRef.current.dispose();
+        if (rendererRef.current.domElement.parentNode)
+          rendererRef.current.domElement.parentNode.removeChild(rendererRef.current.domElement);
+      }
+    };
+  }, [initScene]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (!mountRef.current || !rendererRef.current || !cameraRef.current) return;
+      const w = mountRef.current.clientWidth, h = mountRef.current.clientHeight;
+      rendererRef.current.setSize(w, h);
+      cameraRef.current.aspect = w / h;
+      cameraRef.current.updateProjectionMatrix();
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    if (controlsRef.current) controlsRef.current.autoRotate = autoRotate;
+  }, [autoRotate]);
+
+  // Toggling visibility without reinitializing the scene
+  useEffect(() => {
+    if (!gridRef.current || !meshesRef.current[1]) return;
+    updateInstances(gridRef.current, gridSize, meshesRef.current, hiddenStates);
+  }, [hiddenStates]);
+
+  const toggleState = (s) => {
+    setHiddenStates(prev => {
+      const next = new Set(prev);
+      if (next.has(s)) next.delete(s); else next.add(s);
+      return next;
+    });
+  };
+
+  const handleReset = () => { setPlaying(false); playingRef.current = false; initScene(); };
+  const handleStep = () => {
+    if (!gridRef.current || !meshesRef.current[1]) return;
+    gridRef.current = step(gridRef.current, gridSize, threshold, neighborhood, numStates);
+    updateInstances(gridRef.current, gridSize, meshesRef.current, hiddenStates);
+    setGeneration(g => g + 1);
+  };
+
+  const font = "'JetBrains Mono', 'Fira Code', 'SF Mono', monospace";
+  const panelStyle = {
+    position: "absolute",
+    background: "rgba(4, 6, 14, 0.9)",
+    backdropFilter: "blur(20px)",
+    border: `1px solid ${colors.ui}18`,
+    borderRadius: "12px",
+    padding: "16px",
+    color: "#d0dce8",
+    fontFamily: font,
+    fontSize: "12px",
+  };
+  const btnStyle = (active = false) => ({
+    background: active ? `${colors.ui}28` : "rgba(255,255,255,0.03)",
+    border: `1px solid ${active ? colors.ui : "rgba(255,255,255,0.08)"}`,
+    color: active ? colors.ui : "#8899aa",
+    borderRadius: "8px",
+    padding: "8px 14px",
+    cursor: "pointer",
+    fontFamily: font,
+    fontSize: "11px",
+    fontWeight: 600,
+    letterSpacing: "0.5px",
+    textTransform: "uppercase",
+    transition: "all 0.2s",
+  });
+  const sliderTrack = {
+    width: "100%",
+    height: "4px",
+    borderRadius: "2px",
+    appearance: "none",
+    background: `linear-gradient(90deg, ${colors.ui}40, ${colors.ui}10)`,
+    outline: "none",
+    cursor: "pointer",
+  };
+  const labelStyle = { fontSize: "9px", color: "#556677", letterSpacing: "1.5px", textTransform: "uppercase", display: "block", marginBottom: 6 };
+
+  const totalCells = Object.values(counts).reduce((a, b) => a + b, 0);
+  const pct = (v) => totalCells ? Math.round((v / totalCells) * 100) : 0;
+
+  return (
+    <div style={{ width: "100%", height: "100vh", background: colors.bg, position: "relative", overflow: "hidden", fontFamily: font }}>
+      <div ref={mountRef} style={{ width: "100%", height: "100%" }} />
+
+      {/* Title */}
+      <div style={{ position: "absolute", top: 20, left: 24, zIndex: 10 }}>
+        <h1 style={{
+          margin: 0, fontSize: "22px", fontWeight: 700, letterSpacing: "3px", textTransform: "uppercase",
+          background: `linear-gradient(135deg, ${statePalette.join(", ")})`,
+          WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+          filter: `drop-shadow(0 0 20px ${colors.ui}40)`,
+          fontFamily: font,
+        }}>
+          CYCLIC³
+        </h1>
+        <p style={{ margin: "4px 0 0", fontSize: "10px", color: "#445566", letterSpacing: "2px", textTransform: "uppercase" }}>
+          {numStates}-State Cyclic Automata
+        </p>
+      </div>
+
+      {/* Gen counter */}
+      <div style={{ position: "absolute", top: 20, right: 24, zIndex: 10, textAlign: "right" }}>
+        <div style={{ fontSize: "9px", color: "#445566", letterSpacing: "2px", marginBottom: 2 }}>GEN</div>
+        <div style={{ fontSize: "18px", fontWeight: 700, color: colors.ui, textShadow: `0 0 20px ${colors.ui}40`, fontVariantNumeric: "tabular-nums" }}>{generation}</div>
+      </div>
+
+      {/* State Toggles & Population */}
+      <div style={{
+        ...panelStyle,
+        top: 70, right: 20, zIndex: 10, width: "180px",
+        maxHeight: "calc(100vh - 140px)", overflowY: "auto",
+      }}>
+        <label style={labelStyle}>States — click to toggle</label>
+        <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+          {Array.from({ length: numStates }, (_, i) => {
+            const s = i + 1;
+            const c = statePalette[i];
+            const count = counts[s] || 0;
+            const hidden = hiddenStates.has(s);
+            return (
+              <div
+                key={s}
+                onClick={() => toggleState(s)}
+                style={{
+                  display: "flex", alignItems: "center", gap: "8px",
+                  padding: "4px 8px", borderRadius: "6px", cursor: "pointer",
+                  background: hidden ? "rgba(255,255,255,0.02)" : `${c}12`,
+                  border: `1px solid ${hidden ? "rgba(255,255,255,0.04)" : c + "40"}`,
+                  opacity: hidden ? 0.4 : 1,
+                  transition: "all 0.2s",
+                  userSelect: "none",
+                }}
+              >
+                <div style={{
+                  width: 12, height: 12, borderRadius: "3px",
+                  background: hidden ? "transparent" : c,
+                  border: `2px solid ${c}`,
+                  boxShadow: hidden ? "none" : `0 0 8px ${c}50`,
+                  transition: "all 0.2s",
+                  flexShrink: 0,
+                }} />
+                <div style={{ flex: 1, fontSize: "10px", color: hidden ? "#556677" : "#c0d0e0", fontWeight: 600 }}>
+                  S{s}
+                </div>
+                <div style={{ fontSize: "10px", color: hidden ? "#334455" : c, fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>
+                  {count}
+                </div>
+                <div style={{ fontSize: "9px", color: "#445566", width: "28px", textAlign: "right" }}>
+                  {pct(count)}%
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {/* Stacked bar */}
+        <div style={{ display: "flex", height: "6px", borderRadius: "3px", overflow: "hidden", background: "rgba(255,255,255,0.04)", marginTop: 8 }}>
+          {totalCells > 0 && Array.from({ length: numStates }, (_, i) => {
+            const s = i + 1;
+            return (
+              <div key={s} style={{
+                width: `${pct(counts[s] || 0)}%`,
+                background: hiddenStates.has(s) ? "rgba(255,255,255,0.06)" : statePalette[i],
+                transition: "width 0.3s",
+              }} />
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Playback Controls */}
+      <div style={{
+        ...panelStyle, bottom: 20, left: "50%", transform: "translateX(-50%)", zIndex: 10,
+        display: "flex", gap: "10px", alignItems: "center", padding: "10px 16px",
+      }}>
+        <button onClick={() => setPlaying(!playing)} style={btnStyle(playing)}>
+          {playing ? "⏸ Pause" : "▶ Play"}
+        </button>
+        <button onClick={handleStep} style={btnStyle()} disabled={playing}>⏭ Step</button>
+        <button onClick={handleReset} style={btnStyle()}>↻ Reset</button>
+      </div>
+
+      {/* Settings Panel */}
+      <div style={{
+        ...panelStyle, bottom: 80, left: 20, zIndex: 10, width: "220px",
+        maxHeight: "calc(100vh - 140px)", overflowY: "auto",
+      }}>
+        <div style={{ marginBottom: 14 }}>
+          <label style={labelStyle}>Theme</label>
+          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+            {Object.entries(THEMES).map(([name, t]) => (
+              <button
+                key={name} title={name}
+                onClick={() => setTheme(name)}
+                style={{
+                  width: 28, height: 18, borderRadius: "4px", cursor: "pointer",
+                  background: `linear-gradient(135deg, ${t.ui}, ${t.bg})`,
+                  border: theme === name ? "2px solid #fff" : "2px solid transparent",
+                  boxShadow: theme === name ? `0 0 10px ${t.ui}60` : "none",
+                  transition: "all 0.2s",
+                }}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <label style={labelStyle}>Cell Shape</label>
+          <div style={{ display: "flex", gap: "6px" }}>
+            {["cube", "sphere", "diamond"].map(s => (
+              <button key={s} onClick={() => setCubeShape(s)} style={btnStyle(cubeShape === s)}>
+                {s === "cube" ? "◼" : s === "sphere" ? "●" : "◆"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <label style={labelStyle}>Neighborhood</label>
+          <div style={{ display: "flex", gap: "6px" }}>
+            {NEIGHBORHOODS.map(n => (
+              <button key={n} onClick={() => setNeighborhood(n)} style={btnStyle(neighborhood === n)}>
+                {n === "moore" ? "Moore (26)" : "VN (6)"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+            <label style={labelStyle}>States</label>
+            <span style={{ fontSize: "10px", color: colors.ui }}>{numStates}</span>
+          </div>
+          <input type="range" min={3} max={15} value={numStates} onChange={e => setNumStates(Number(e.target.value))} style={sliderTrack} />
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+            <label style={labelStyle}>Threshold</label>
+            <span style={{ fontSize: "10px", color: colors.ui }}>{threshold}</span>
+          </div>
+          <input type="range" min={1} max={10} value={threshold} onChange={e => setThreshold(Number(e.target.value))} style={sliderTrack} />
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+            <label style={labelStyle}>Speed</label>
+            <span style={{ fontSize: "10px", color: colors.ui }}>{speed}ms</span>
+          </div>
+          <input type="range" min={30} max={800} value={speed} onChange={e => setSpeed(Number(e.target.value))} style={sliderTrack} />
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+            <label style={labelStyle}>Grid Size</label>
+            <span style={{ fontSize: "10px", color: colors.ui }}>{gridSize}³</span>
+          </div>
+          <input type="range" min={6} max={24} value={gridSize} onChange={e => setGridSize(Number(e.target.value))} style={sliderTrack} />
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+            <label style={labelStyle}>Density</label>
+            <span style={{ fontSize: "10px", color: colors.ui }}>{Math.round(density * 100)}%</span>
+          </div>
+          <input type="range" min={10} max={60} value={density * 100} onChange={e => setDensity(Number(e.target.value) / 100)} style={sliderTrack} />
+        </div>
+
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button onClick={() => setShowBounds(!showBounds)} style={btnStyle(showBounds)}>Bounds</button>
+          <button onClick={() => setAutoRotate(!autoRotate)} style={btnStyle(autoRotate)}>Rotate</button>
+        </div>
+      </div>
+
+      {/* Edge fades */}
+      <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "100px", background: `linear-gradient(transparent, ${colors.bg})`, pointerEvents: "none", zIndex: 5 }} />
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "70px", background: `linear-gradient(${colors.bg}, transparent)`, pointerEvents: "none", zIndex: 5 }} />
+
+      <style>{`
+        input[type="range"]::-webkit-slider-thumb {
+          -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+          background: ${colors.ui}; box-shadow: 0 0 10px ${colors.ui}80; cursor: pointer;
+        }
+        input[type="range"]::-moz-range-thumb {
+          width: 14px; height: 14px; border-radius: 50%;
+          background: ${colors.ui}; box-shadow: 0 0 10px ${colors.ui}80; cursor: pointer; border: none;
+        }
+        button:hover { filter: brightness(1.3); }
+        button:disabled { opacity: 0.4; cursor: not-allowed; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: ${colors.ui}30; border-radius: 2px; }
+      `}</style>
+    </div>
+  );
+}
+
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(React.createElement(RPS3D));
+
+</script>
+</body>
+</html>

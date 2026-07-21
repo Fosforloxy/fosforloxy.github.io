@@ -9,23 +9,57 @@
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../style.css">
 <style>
-  .collage-wrap {
-    margin: 2.5rem 0;
+  .collage-frame {
+    margin: 2.5rem 0 0.75rem;
     border: 1px solid var(--glass);
     background: var(--paper-deep);
-    padding: 0.75rem;
+    padding: 0.6rem;
     display: inline-block;
     max-width: 100%;
+    vertical-align: top;
   }
-  .collage-wrap img {
+  .collage-frame img {
     display: block;
     width: 100%;
     height: auto;
     max-width: 720px;
   }
+  .collage-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 2.5rem;
+  }
+  #btn-regenerate {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 8px 16px;
+    border: 1px solid var(--glass);
+    background: transparent;
+    color: var(--moss);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+  }
+  #btn-regenerate:hover {
+    border-color: var(--moss);
+    background: color-mix(in oklab, var(--moss) 8%, transparent);
+  }
+  #btn-regenerate:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+  #collage-seed {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--glass);
+    letter-spacing: 0.06em;
+  }
   .steps {
     list-style: none;
-    margin: 2rem 0 0;
+    margin: 0;
     padding: 0;
     max-width: var(--measure);
     counter-reset: step;
@@ -73,14 +107,18 @@
   <h1 class="page-title">Flag Collager</h1>
   <p class="lede">An organic flag mosaic grown by edge-color affinity, then rearranged by simulated annealing until neighboring borders agree.</p>
 
-  <div class="collage-wrap">
-    <img src="collage.png" alt="A mosaic of ~79 world and regional flags arranged so that touching edges share similar colors" width="720">
+  <div class="collage-frame">
+    <img id="collage-img" src="collage.png" alt="A mosaic of roughly 80 world and regional flags arranged so touching edges share similar colors" width="720">
+  </div>
+  <div class="collage-controls">
+    <button id="btn-regenerate">New layout</button>
+    <span id="collage-seed">seed 7 &middot; 79 flags</span>
   </div>
 
   <ol class="steps">
     <li>
       <strong>Edge sampling</strong>
-      Downloads ~265 flags and samples 20 pixels along each of their four edges, averaging into a color signature per side. Right edge of one flag is directly compared to the left edge of a potential neighbor.
+      Downloads ~265 flags and samples 20 pixels along each of their four edges, averaging into a color signature per side. Right edge of one flag is compared directly to the left edge of a potential neighbor.
     </li>
     <li>
       <strong>Pairwise distance matrix</strong>
@@ -98,5 +136,38 @@
 
   <footer>Finn Mulligan &middot; New York</footer>
 </div>
+
+<script>
+(function () {
+  var collages = [
+    { src: 'collage.png',    label: 'seed 7 · 79 flags' },
+    { src: 'collage_13.png', label: 'seed 13 · 77 flags' },
+    { src: 'collage_23.png', label: 'seed 23 · 81 flags' },
+    { src: 'collage_55.png', label: 'seed 55 · 78 flags' },
+    { src: 'collage_88.png', label: 'seed 88 · 81 flags' },
+  ];
+
+  var current = 0;
+  var img = document.getElementById('collage-img');
+  var label = document.getElementById('collage-seed');
+  var btn = document.getElementById('btn-regenerate');
+
+  btn.addEventListener('click', function () {
+    btn.disabled = true;
+    var next = (current + 1) % collages.length;
+    var c = collages[next];
+
+    var tmp = new Image();
+    tmp.onload = function () {
+      current = next;
+      img.src = c.src;
+      label.textContent = c.label;
+      btn.disabled = false;
+    };
+    tmp.onerror = function () { btn.disabled = false; };
+    tmp.src = c.src;
+  });
+})();
+</script>
 </body>
 </html>

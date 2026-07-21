@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Morphogenic Lattice — 3D Emergent Cellular Automaton</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=Syne:wght@400;600;700&display=swap');
+  
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  
+  body {
+    background: #08080c;
+    color: #c8c8d0;
+    font-family: 'JetBrains Mono', monospace;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+  
+  #canvas-container {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+  }
+  
+  canvas { display: block; }
+  
+  .overlay {
+    position: absolute;
+    z-index: 10;
+    pointer-events: none;
+  }
+  
+  .title-block {
+    top: 24px; left: 28px;
+  }
+  
+  .title-block h1 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 20px;
+    color: #e0e0e8;
+    letter-spacing: -0.5px;
+    margin-bottom: 2px;
+  }
+  
+  .title-block .subtitle {
+    font-size: 10px;
+    color: #5a5a6a;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  
+  .stats-block {
+    top: 24px; right: 28px;
+    text-align: right;
+    font-size: 11px;
+    line-height: 1.7;
+    color: #5a5a6a;
+  }
+  
+  .stats-block .val {
+    color: #80ffd4;
+    font-weight: 500;
+  }
+  
+  .controls {
+    bottom: 0; left: 0; right: 0;
+    pointer-events: all;
+    background: linear-gradient(to top, rgba(8,8,12,0.95) 0%, rgba(8,8,12,0.7) 70%, transparent 100%);
+    padding: 20px 28px 22px;
+  }
+  
+  .control-row {
+    display: flex;
+    gap: 20px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+  }
+  
+  .control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 100px;
+  }
+  
+  .control-group label {
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #4a4a5a;
+  }
+  
+  .control-group .input-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .control-group input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 90px;
+    height: 3px;
+    background: #1e1e2a;
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  
+  .control-group input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: #80ffd4;
+    border: none;
+    cursor: pointer;
+  }
+  
+  .control-group input[type="range"]::-moz-range-thumb {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: #80ffd4;
+    border: none;
+    cursor: pointer;
+  }
+  
+  .control-group .readout {
+    font-size: 11px;
+    color: #80ffd4;
+    min-width: 32px;
+    text-align: right;
+    font-weight: 500;
+  }
+  
+  .btn-row {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+    align-items: flex-end;
+  }
+  
+  .btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 7px 14px;
+    border: 1px solid #2a2a3a;
+    background: rgba(20,20,30,0.8);
+    color: #8a8a9a;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  
+  .btn:hover {
+    border-color: #80ffd4;
+    color: #80ffd4;
+    background: rgba(128,255,212,0.05);
+  }
+  
+  .btn.active {
+    border-color: #80ffd4;
+    color: #08080c;
+    background: #80ffd4;
+  }
+  
+  .preset-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  
+  .preset-row .btn { font-size: 9px; padding: 5px 10px; }
+  
+  .info-hint {
+    position: absolute;
+    bottom: 140px;
+    left: 28px;
+    font-size: 10px;
+    color: #3a3a4a;
+    pointer-events: none;
+    z-index: 10;
+  }
+</style>
+</head>
+<body>
+
+<div id="canvas-container"></div>
+
+<div class="overlay title-block">
+  <h1>Morphogenic Lattice</h1>
+  <div class="subtitle">3D continuous cellular automaton · activator-inhibitor dynamics</div>
+</div>
+
+<div class="overlay stats-block">
+  <div>cells <span class="val" id="stat-cells">0</span></div>
+  <div>active <span class="val" id="stat-active">0</span></div>
+  <div>gen <span class="val" id="stat-gen">0</span></div>
+  <div>fps <span class="val" id="stat-fps">0</span></div>
+</div>
+
+<div class="info-hint">drag to orbit · scroll to zoom · shift+drag to pan</div>
+
+<a href="../" style="position:absolute;top:22px;right:28px;z-index:20;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#3a3a4a;text-decoration:none;transition:color 0.15s;" onmouseover="this.style.color='#80ffd4'" onmouseout="this.style.color='#3a3a4a'">&#8592; Catalog</a>
+
+<div class="overlay controls">
+  <div class="preset-row">
+    <button class="btn" onclick="loadPreset('spots')">Turing spots</button>
+    <button class="btn" onclick="loadPreset('labyrinth')">Labyrinth</button>
+    <button class="btn" onclick="loadPreset('coral')">Coral growth</button>
+    <button class="btn" onclick="loadPreset('mitosis')">Mitosis</button>
+    <button class="btn" onclick="loadPreset('waves')">Reaction waves</button>
+  </div>
+  <div class="control-row">
+    <div class="control-group">
+      <label>Activation μ</label>
+      <div class="input-row">
+        <input type="range" id="sl-mu" min="0.05" max="0.5" step="0.01" value="0.22">
+        <span class="readout" id="ro-mu">0.22</span>
+      </div>
+    </div>
+    <div class="control-group">
+      <label>Activation σ</label>
+      <div class="input-row">
+        <input type="range" id="sl-sigma" min="0.01" max="0.2" step="0.005" value="0.045">
+        <span class="readout" id="ro-sigma">0.045</span>
+      </div>
+    </div>
+    <div class="control-group">
+      <label>Inhibit str</label>
+      <div class="input-row">
+        <input type="range" id="sl-inhib" min="0.0" max="1.0" step="0.02" value="0.5">
+        <span class="readout" id="ro-inhib">0.50</span>
+      </div>
+    </div>
+    <div class="control-group">
+      <label>Speed (dt)</label>
+      <div class="input-row">
+        <input type="range" id="sl-dt" min="0.01" max="0.15" step="0.005" value="0.05">
+        <span class="readout" id="ro-dt">0.05</span>
+      </div>
+    </div>
+    <div class="control-group">
+      <label>Threshold</label>
+      <div class="input-row">
+        <input type="range" id="sl-thresh" min="0.05" max="0.6" step="0.01" value="0.15">
+        <span class="readout" id="ro-thresh">0.15</span>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn" id="btn-pause" onclick="togglePause()">Pause</button>
+      <button class="btn" onclick="resetSim()">Reset</button>
+      <button class="btn" onclick="seedRandom()">Reseed</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const N = 26;
+const TOTAL = N * N * N;
+
+let grid = new Float32Array(TOTAL);
+let gridB = new Float32Array(TOTAL);
+let generation = 0;
+let paused = false;
+
+let mu_a = 0.22;
+let sigma_a = 0.045;
+let inhibStrength = 0.5;
+let dt = 0.05;
+let renderThreshold = 0.15;
+
+const innerR = 1.8;
+const outerR = 3.5;
+
+let innerOffsets = [];
+let outerOffsets = [];
+let innerWeights = [];
+let outerWeights = [];
+
+function precomputeKernels() {
+  innerOffsets = [];
+  outerOffsets = [];
+  innerWeights = [];
+  outerWeights = [];
+  const R = Math.ceil(outerR);
+  for (let dz = -R; dz <= R; dz++) {
+    for (let dy = -R; dy <= R; dy++) {
+      for (let dx = -R; dx <= R; dx++) {
+        if (dx === 0 && dy === 0 && dz === 0) continue;
+        const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+        if (dist <= innerR) {
+          innerOffsets.push(dx, dy, dz);
+          const w = 1.0 - dist / innerR;
+          innerWeights.push(w);
+        } else if (dist <= outerR) {
+          outerOffsets.push(dx, dy, dz);
+          const t = (dist - innerR) / (outerR - innerR);
+          const w = 1.0 - t;
+          outerWeights.push(w);
+        }
+      }
+    }
+  }
+  let sumI = 0, sumO = 0;
+  for (let i = 0; i < innerWeights.length; i++) sumI += innerWeights[i];
+  for (let i = 0; i < outerWeights.length; i++) sumO += outerWeights[i];
+  for (let i = 0; i < innerWeights.length; i++) innerWeights[i] /= sumI;
+  for (let i = 0; i < outerWeights.length; i++) outerWeights[i] /= sumO;
+}
+
+function idx(x, y, z) {
+  return ((z + N) % N) * N * N + ((y + N) % N) * N + ((x + N) % N);
+}
+
+function gaussian(x, mu, sigma) {
+  const d = (x - mu) / sigma;
+  return Math.exp(-0.5 * d * d);
+}
+
+function stepSim() {
+  for (let z = 0; z < N; z++) {
+    for (let y = 0; y < N; y++) {
+      for (let x = 0; x < N; x++) {
+        let actSum = 0;
+        for (let i = 0; i < innerWeights.length; i++) {
+          const ox = innerOffsets[i*3], oy = innerOffsets[i*3+1], oz = innerOffsets[i*3+2];
+          actSum += grid[idx(x+ox, y+oy, z+oz)] * innerWeights[i];
+        }
+        let inhSum = 0;
+        for (let i = 0; i < outerWeights.length; i++) {
+          const ox = outerOffsets[i*3], oy = outerOffsets[i*3+1], oz = outerOffsets[i*3+2];
+          inhSum += grid[idx(x+ox, y+oy, z+oz)] * outerWeights[i];
+        }
+        
+        const growth = gaussian(actSum, mu_a, sigma_a) * 2.0 - 1.0;
+        const inhibition = inhSum * inhibStrength;
+        const combined = growth - inhibition;
+        
+        const ci = z * N * N + y * N + x;
+        gridB[ci] = Math.max(0, Math.min(1, grid[ci] + dt * combined));
+      }
+    }
+  }
+  const tmp = grid;
+  grid = gridB;
+  gridB = tmp;
+  generation++;
+}
+
+function seedRandom() {
+  generation = 0;
+  for (let i = 0; i < TOTAL; i++) {
+    grid[i] = Math.random() < 0.12 ? Math.random() * 0.8 + 0.2 : 0;
+  }
+}
+
+function seedCenter() {
+  generation = 0;
+  grid.fill(0);
+  const c = N / 2;
+  const r = 5;
+  for (let z = 0; z < N; z++) {
+    for (let y = 0; y < N; y++) {
+      for (let x = 0; x < N; x++) {
+        const d = Math.sqrt((x-c)**2 + (y-c)**2 + (z-c)**2);
+        if (d < r) {
+          grid[z*N*N + y*N + x] = Math.random() * 0.6 + 0.3;
+        }
+      }
+    }
+  }
+}
+
+function resetSim() {
+  seedCenter();
+}
+
+const presets = {
+  spots:     { mu: 0.22, sigma: 0.045, inhib: 0.50, dt: 0.05, thresh: 0.15 },
+  labyrinth: { mu: 0.28, sigma: 0.07,  inhib: 0.35, dt: 0.04, thresh: 0.12 },
+  coral:     { mu: 0.18, sigma: 0.035, inhib: 0.6,  dt: 0.06, thresh: 0.10 },
+  mitosis:   { mu: 0.25, sigma: 0.05,  inhib: 0.45, dt: 0.07, thresh: 0.20 },
+  waves:     { mu: 0.15, sigma: 0.08,  inhib: 0.25, dt: 0.03, thresh: 0.08 },
+};
+
+function loadPreset(name) {
+  const p = presets[name];
+  mu_a = p.mu; sigma_a = p.sigma; inhibStrength = p.inhib; dt = p.dt; renderThreshold = p.thresh;
+  document.getElementById('sl-mu').value = p.mu;
+  document.getElementById('sl-sigma').value = p.sigma;
+  document.getElementById('sl-inhib').value = p.inhib;
+  document.getElementById('sl-dt').value = p.dt;
+  document.getElementById('sl-thresh').value = p.thresh;
+  document.getElementById('ro-mu').textContent = p.mu.toFixed(2);
+  document.getElementById('ro-sigma').textContent = p.sigma.toFixed(3);
+  document.getElementById('ro-inhib').textContent = p.inhib.toFixed(2);
+  document.getElementById('ro-dt').textContent = p.dt.toFixed(2);
+  document.getElementById('ro-thresh').textContent = p.thresh.toFixed(2);
+  seedCenter();
+}
+
+function togglePause() {
+  paused = !paused;
+  document.getElementById('btn-pause').classList.toggle('active', paused);
+  document.getElementById('btn-pause').textContent = paused ? 'Play' : 'Pause';
+}
+
+// Three.js setup
+const container = document.getElementById('canvas-container');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x08080c);
+scene.fog = new THREE.FogExp2(0x08080c, 0.015);
+
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 500);
+camera.position.set(45, 35, 45);
+camera.lookAt(0, 0, 0);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+container.appendChild(renderer.domElement);
+
+// Lighting
+const ambientLight = new THREE.AmbientLight(0x303040, 0.6);
+scene.add(ambientLight);
+
+const dirLight1 = new THREE.DirectionalLight(0x80ffd4, 0.8);
+dirLight1.position.set(30, 50, 20);
+scene.add(dirLight1);
+
+const dirLight2 = new THREE.DirectionalLight(0xc080ff, 0.4);
+dirLight2.position.set(-20, -10, 30);
+scene.add(dirLight2);
+
+const pointLight = new THREE.PointLight(0xff6090, 0.3, 80);
+pointLight.position.set(0, 0, 0);
+scene.add(pointLight);
+
+// Grid wireframe for context
+const gridHelper = new THREE.BoxHelper(
+  new THREE.Mesh(new THREE.BoxGeometry(N, N, N)),
+  0x1a1a2e
+);
+gridHelper.position.set(0, 0, 0);
+scene.add(gridHelper);
+
+// Instanced mesh for voxels
+const voxGeo = new THREE.BoxGeometry(0.85, 0.85, 0.85);
+const voxMat = new THREE.MeshStandardMaterial({
+  metalness: 0.1,
+  roughness: 0.5,
+  transparent: true,
+  opacity: 0.9,
+});
+const maxInstances = Math.min(TOTAL, 8000);
+const instancedMesh = new THREE.InstancedMesh(voxGeo, voxMat, maxInstances);
+instancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+scene.add(instancedMesh);
+
+const dummy = new THREE.Object3D();
+const color = new THREE.Color();
+const half = N / 2;
+
+function tealPurpleGold(t) {
+  if (t < 0.4) {
+    const s = t / 0.4;
+    color.setRGB(
+      0.1 + s * 0.4,
+      0.8 + s * 0.2,
+      0.7 - s * 0.1
+    );
+  } else if (t < 0.75) {
+    const s = (t - 0.4) / 0.35;
+    color.setRGB(
+      0.5 + s * 0.3,
+      1.0 - s * 0.5,
+      0.6 + s * 0.2
+    );
+  } else {
+    const s = (t - 0.75) / 0.25;
+    color.setRGB(
+      0.8 + s * 0.2,
+      0.5 + s * 0.3,
+      0.8 - s * 0.4
+    );
+  }
+  return color;
+}
+
+function updateInstances() {
+  let count = 0;
+  for (let z = 0; z < N && count < maxInstances; z++) {
+    for (let y = 0; y < N && count < maxInstances; y++) {
+      for (let x = 0; x < N && count < maxInstances; x++) {
+        const v = grid[z * N * N + y * N + x];
+        if (v > renderThreshold) {
+          dummy.position.set(x - half, y - half, z - half);
+          const s = 0.5 + v * 0.5;
+          dummy.scale.set(s, s, s);
+          dummy.updateMatrix();
+          instancedMesh.setMatrixAt(count, dummy.matrix);
+          tealPurpleGold(v);
+          instancedMesh.setColorAt(count, color);
+          count++;
+        }
+      }
+    }
+  }
+  instancedMesh.count = count;
+  instancedMesh.instanceMatrix.needsUpdate = true;
+  if (instancedMesh.instanceColor) instancedMesh.instanceColor.needsUpdate = true;
+  
+  document.getElementById('stat-active').textContent = count;
+  document.getElementById('stat-gen').textContent = generation;
+  document.getElementById('stat-cells').textContent = TOTAL;
+}
+
+// Custom orbit controls
+let isDragging = false;
+let isPanning = false;
+let prevMouse = { x: 0, y: 0 };
+let spherical = { theta: Math.PI / 4, phi: Math.PI / 4, radius: 55 };
+let panOffset = new THREE.Vector3(0, 0, 0);
+
+function updateCamera() {
+  const sp = Math.sin(spherical.phi);
+  const cp = Math.cos(spherical.phi);
+  const st = Math.sin(spherical.theta);
+  const ct = Math.cos(spherical.theta);
+  camera.position.set(
+    spherical.radius * sp * ct + panOffset.x,
+    spherical.radius * cp + panOffset.y,
+    spherical.radius * sp * st + panOffset.z
+  );
+  camera.lookAt(panOffset);
+}
+
+renderer.domElement.addEventListener('mousedown', e => {
+  if (e.shiftKey) { isPanning = true; } else { isDragging = true; }
+  prevMouse.x = e.clientX;
+  prevMouse.y = e.clientY;
+});
+
+window.addEventListener('mousemove', e => {
+  const dx = e.clientX - prevMouse.x;
+  const dy = e.clientY - prevMouse.y;
+  prevMouse.x = e.clientX;
+  prevMouse.y = e.clientY;
+  if (isDragging) {
+    spherical.theta -= dx * 0.005;
+    spherical.phi -= dy * 0.005;
+    spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
+    updateCamera();
+  }
+  if (isPanning) {
+    const right = new THREE.Vector3();
+    const up = new THREE.Vector3();
+    camera.getWorldDirection(up);
+    right.crossVectors(up, camera.up).normalize();
+    up.copy(camera.up).normalize();
+    panOffset.add(right.multiplyScalar(-dx * 0.05));
+    panOffset.add(up.multiplyScalar(dy * 0.05));
+    updateCamera();
+  }
+});
+
+window.addEventListener('mouseup', () => { isDragging = false; isPanning = false; });
+
+renderer.domElement.addEventListener('wheel', e => {
+  spherical.radius *= 1 + e.deltaY * 0.001;
+  spherical.radius = Math.max(15, Math.min(120, spherical.radius));
+  updateCamera();
+  e.preventDefault();
+}, { passive: false });
+
+// Touch support
+let lastTouchDist = 0;
+renderer.domElement.addEventListener('touchstart', e => {
+  if (e.touches.length === 1) {
+    isDragging = true;
+    prevMouse.x = e.touches[0].clientX;
+    prevMouse.y = e.touches[0].clientY;
+  } else if (e.touches.length === 2) {
+    isDragging = false;
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    lastTouchDist = Math.sqrt(dx*dx + dy*dy);
+  }
+  e.preventDefault();
+}, { passive: false });
+
+renderer.domElement.addEventListener('touchmove', e => {
+  if (e.touches.length === 1 && isDragging) {
+    const dx = e.touches[0].clientX - prevMouse.x;
+    const dy = e.touches[0].clientY - prevMouse.y;
+    prevMouse.x = e.touches[0].clientX;
+    prevMouse.y = e.touches[0].clientY;
+    spherical.theta -= dx * 0.005;
+    spherical.phi -= dy * 0.005;
+    spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
+    updateCamera();
+  } else if (e.touches.length === 2) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    spherical.radius *= lastTouchDist / dist;
+    spherical.radius = Math.max(15, Math.min(120, spherical.radius));
+    lastTouchDist = dist;
+    updateCamera();
+  }
+  e.preventDefault();
+}, { passive: false });
+
+renderer.domElement.addEventListener('touchend', () => { isDragging = false; });
+
+// Slider bindings
+function bindSlider(sliderId, readoutId, setter, fmt) {
+  const sl = document.getElementById(sliderId);
+  const ro = document.getElementById(readoutId);
+  sl.addEventListener('input', () => {
+    const v = parseFloat(sl.value);
+    setter(v);
+    ro.textContent = fmt(v);
+  });
+}
+
+bindSlider('sl-mu', 'ro-mu', v => mu_a = v, v => v.toFixed(2));
+bindSlider('sl-sigma', 'ro-sigma', v => sigma_a = v, v => v.toFixed(3));
+bindSlider('sl-inhib', 'ro-inhib', v => inhibStrength = v, v => v.toFixed(2));
+bindSlider('sl-dt', 'ro-dt', v => dt = v, v => v.toFixed(2));
+bindSlider('sl-thresh', 'ro-thresh', v => renderThreshold = v, v => v.toFixed(2));
+
+// FPS tracking
+let frameCount = 0;
+let lastFpsTime = performance.now();
+
+// Animation loop
+function animate() {
+  requestAnimationFrame(animate);
+  
+  if (!paused) {
+    stepSim();
+  }
+  
+  updateInstances();
+  
+  // Slow rotate when idle
+  if (!isDragging && !paused) {
+    spherical.theta += 0.001;
+    updateCamera();
+  }
+  
+  renderer.render(scene, camera);
+  
+  frameCount++;
+  const now = performance.now();
+  if (now - lastFpsTime > 500) {
+    document.getElementById('stat-fps').textContent = Math.round(frameCount / ((now - lastFpsTime) / 1000));
+    frameCount = 0;
+    lastFpsTime = now;
+  }
+}
+
+// Window resize
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// Initialize
+precomputeKernels();
+seedCenter();
+updateCamera();
+animate();
+</script>
+</body>
+</html>
