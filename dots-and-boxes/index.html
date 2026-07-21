@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dots &amp; Boxes — Finn Mulligan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+<style>
+.game-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.size-toggle {
+  display: flex;
+  border: 1px solid var(--glass);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.size-toggle button {
+  appearance: none;
+  border: none;
+  background: transparent;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  padding: 0.4rem 1rem;
+  cursor: pointer;
+  transition: background 120ms, color 120ms;
+}
+
+.size-toggle button.active {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.btn-new {
+  appearance: none;
+  border: 1px solid var(--glass);
+  background: transparent;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  padding: 0.4rem 1.1rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 120ms, color 120ms;
+}
+
+.btn-new:hover { border-color: var(--ink); color: var(--ink); }
+
+.scoreboard {
+  display: flex;
+  gap: 2rem;
+}
+
+.score-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.score-label {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.score-label.you  { color: var(--moss); }
+.score-label.ai   { color: var(--amber); }
+
+.score-value {
+  font-family: var(--display);
+  font-size: 2.2rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.status-line {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  min-height: 1.2em;
+}
+
+.board-outer {
+  width: 100%;
+  max-width: 440px;
+}
+
+.board-outer svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.source-link {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--glass);
+  letter-spacing: 0.05em;
+}
+
+.source-link a {
+  color: var(--moss);
+  text-decoration: none;
+  border-bottom: 1px solid var(--glass);
+}
+
+.source-link a:hover { color: var(--amber); border-color: var(--amber); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="../">&larr; Catalog</a>
+  <h1 class="page-title">Dots &amp; Boxes</h1>
+  <p class="lede">Two opponents. <strong>Easy</strong> is a DQN agent trained from self-play &mdash; no hard-coded strategy, just pattern recognition from games against itself. <strong>Hard</strong> is a minimax search with alpha-beta pruning that looks several moves ahead and reasons explicitly about which moves are safe to make.</p>
+
+  <div class="game-wrap">
+
+    <div class="controls">
+      <div class="size-toggle">
+        <button id="btn-3x3" class="active">3&times;3</button>
+        <button id="btn-4x4">4&times;4</button>
+      </div>
+      <div class="size-toggle">
+        <button id="btn-easy">Easy</button>
+        <button id="btn-hard" class="active">Hard</button>
+      </div>
+      <button class="btn-new" id="btn-new">New game</button>
+    </div>
+
+    <div class="scoreboard">
+      <div class="score-block">
+        <span class="score-label you">You</span>
+        <span class="score-value" id="score-you">0</span>
+      </div>
+      <div class="score-block">
+        <span class="score-label ai">AI</span>
+        <span class="score-value" id="score-ai">0</span>
+      </div>
+    </div>
+
+    <p class="status-line" id="status">Loading model&hellip;</p>
+
+    <div class="board-outer">
+      <svg id="board" viewBox="0 0 360 360" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+
+    <p class="source-link">Agent trained with DQN &middot; <a href="https://github.com/Fosforloxy/Dots-and-Boxes" target="_blank" rel="noopener">source on GitHub</a></p>
+
+  </div>
+
+  <footer>Finn Mulligan &middot; New York</footer>
+</div>
+
+<script>
+// ── Game logic ────────────────────────────────────────────────────
+class Game {
+  constructor(rows, cols) {
+    this.rows = rows; this.cols = cols;
+    this.hEdges   = Array.from({length: rows+1}, () => new Array(cols).fill(false));
+    this.vEdges   = Array.from({length: rows},   () => new Array(cols+1).fill(false));
+    this.boxOwner = Array.from({length: rows},   () => new Array(cols).fill(null));
+    this.scores   = {1: 0, 2: 0};
+    this.current  = 1;
+  }
+
+  clone() {
+    const g = new Game(this.rows, this.cols);
+    g.hEdges   = this.hEdges.map(r => r.slice());
+    g.vEdges   = this.vEdges.map(r => r.slice());
+    g.boxOwner = this.boxOwner.map(r => r.slice());
+    g.scores   = {...this.scores};
+    g.current  = this.current;
+    return g;
+  }
+
+  getMoves() {
+    const m = [];
+    for (let y = 0; y <= this.rows; y++)
+      for (let x = 0; x < this.cols; x++)
+        if (!this.hEdges[y][x]) m.push(['h', x, y]);
+    for (let y = 0; y < this.rows; y++)
+      for (let x = 0; x <= this.cols; x++)
+        if (!this.vEdges[y][x]) m.push(['v', x, y]);
+    return m;
+  }
+
+  isValid([kind, x, y]) {
+    if (kind === 'h') return y>=0 && y<=this.rows && x>=0 && x<this.cols && !this.hEdges[y][x];
+    return y>=0 && y<this.rows && x>=0 && x<=this.cols && !this.vEdges[y][x];
+  }
+
+  apply([kind, x, y]) {
+    if (kind === 'h') this.hEdges[y][x] = true;
+    else              this.vEdges[y][x] = true;
+    const captured = this._captures(kind, x, y);
+    for (const [r, c] of captured) { this.boxOwner[r][c] = this.current; this.scores[this.current]++; }
+    if (!captured.length) this.current = 3 - this.current;
+    return captured.length;
+  }
+
+  _captures(kind, x, y) {
+    const hits = [];
+    const check = (r, c) => {
+      if (r<0||r>=this.rows||c<0||c>=this.cols) return;
+      if (this.hEdges[r][c] && this.hEdges[r+1][c] && this.vEdges[r][c] && this.vEdges[r][c+1])
+        hits.push([r, c]);
+    };
+    if (kind === 'h') { check(y-1, x); check(y, x); }
+    else              { check(y, x-1); check(y, x); }
+    return hits;
+  }
+
+  done()   { return this.scores[1] + this.scores[2] === this.rows * this.cols; }
+  winner() { return this.scores[1]>this.scores[2] ? 1 : this.scores[2]>this.scores[1] ? 2 : 0; }
+}
+
+// ── Neural network ────────────────────────────────────────────────
+function mmul(W, b, x) {
+  return b.map((bi, i) => { let s=bi; for(let j=0;j<x.length;j++) s+=W[i][j]*x[j]; return s; });
+}
+function fwd(W, x) {
+  let h = mmul(W['net.0.weight'], W['net.0.bias'], x).map(v => v>0?v:0);
+  h = mmul(W['net.2.weight'], W['net.2.bias'], h).map(v => v>0?v:0);
+  return mmul(W['net.4.weight'], W['net.4.bias'], h);
+}
+
+function numH(g)  { return (g.rows+1)*g.cols; }
+function m2i([kind,x,y], g) { return kind==='h' ? y*g.cols+x : numH(g)+y*(g.cols+1)+x; }
+function i2m(i, g) {
+  const nh=numH(g);
+  return i<nh ? ['h', i%g.cols, Math.floor(i/g.cols)]
+              : ['v', (i-nh)%(g.cols+1), Math.floor((i-nh)/(g.cols+1))];
+}
+
+function encode(g, pid) {
+  const opp=3-pid, f=[];
+  for(let y=0;y<=g.rows;y++) for(let x=0;x<g.cols;x++)  f.push(g.hEdges[y][x]?1:0);
+  for(let y=0;y<g.rows;y++)  for(let x=0;x<=g.cols;x++) f.push(g.vEdges[y][x]?1:0);
+  for(let r=0;r<g.rows;r++)  for(let c=0;c<g.cols;c++)  f.push(g.boxOwner[r][c]===pid?1:0);
+  for(let r=0;r<g.rows;r++)  for(let c=0;c<g.cols;c++)  f.push(g.boxOwner[r][c]===opp?1:0);
+  f.push(g.current===pid?1:0);
+  f.push((g.scores[pid]-g.scores[opp])/(g.rows*g.cols));
+  return f;
+}
+
+function agentPick(g, W) {
+  const q = fwd(W, encode(g, g.current));
+  const valid = new Set(g.getMoves().map(m => m2i(m, g)));
+  let bi=-1, bq=-Infinity;
+  for(let i=0;i<q.length;i++) if(valid.has(i)&&q[i]>bq){bq=q[i];bi=i;}
+  return i2m(bi, g);
+}
+
+// ── Alpha-beta agent ──────────────────────────────────────────────
+function boxEdgeCount(g, r, c) {
+  return (g.hEdges[r][c]?1:0) + (g.hEdges[r+1][c]?1:0)
+       + (g.vEdges[r][c]?1:0) + (g.vEdges[r][c+1]?1:0);
+}
+
+function createsCapture(g, [kind, x, y]) {
+  if (kind==='h') {
+    if (y>0       && boxEdgeCount(g,y-1,x)===3) return true;
+    if (y<g.rows  && boxEdgeCount(g,y,x)===3)   return true;
+  } else {
+    if (x>0       && boxEdgeCount(g,y,x-1)===3) return true;
+    if (x<g.cols  && boxEdgeCount(g,y,x)===3)   return true;
+  }
+  return false;
+}
+
+function givesFreeBox(g, [kind, x, y]) {
+  if (kind==='h') {
+    if (y>0       && boxEdgeCount(g,y-1,x)===2) return true;
+    if (y<g.rows  && boxEdgeCount(g,y,x)===2)   return true;
+  } else {
+    if (x>0       && boxEdgeCount(g,y,x-1)===2) return true;
+    if (x<g.cols  && boxEdgeCount(g,y,x)===2)   return true;
+  }
+  return false;
+}
+
+function orderMoves(g, moves) {
+  const cap=[], safe=[], danger=[];
+  for (const m of moves) {
+    if (createsCapture(g,m))   cap.push(m);
+    else if (givesFreeBox(g,m)) danger.push(m);
+    else safe.push(m);
+  }
+  return [...cap, ...safe, ...danger];
+}
+
+function abEval(g, pid) {
+  const opp=3-pid;
+  let v=(g.scores[pid]-g.scores[opp])*10;
+  for(let r=0;r<g.rows;r++) for(let c=0;c<g.cols;c++) {
+    if(g.boxOwner[r][c]!==null) continue;
+    const e=boxEdgeCount(g,r,c);
+    if(e===3) v += g.current===pid ? 4 : -4;
+    else if(e===2) v -= 1;
+  }
+  return v;
+}
+
+function alphabeta(g, depth, alpha, beta, pid) {
+  if(g.done() || depth===0) return abEval(g, pid);
+  const moves = orderMoves(g, g.getMoves());
+  if(g.current===pid) {
+    let v=-Infinity;
+    for(const m of moves) {
+      const c=g.clone(); c.apply(m);
+      v=Math.max(v, alphabeta(c,depth-1,alpha,beta,pid));
+      alpha=Math.max(alpha,v);
+      if(alpha>=beta) break;
+    }
+    return v;
+  } else {
+    let v=Infinity;
+    for(const m of moves) {
+      const c=g.clone(); c.apply(m);
+      v=Math.min(v, alphabeta(c,depth-1,alpha,beta,pid));
+      beta=Math.min(beta,v);
+      if(alpha>=beta) break;
+    }
+    return v;
+  }
+}
+
+function abPick(g) {
+  const depth = g.rows<=3 ? 6 : 4;
+  const pid = g.current;
+  let best=null, bestV=-Infinity, alpha=-Infinity;
+  for(const m of orderMoves(g, g.getMoves())) {
+    const c=g.clone(); c.apply(m);
+    const v=alphabeta(c,depth-1,alpha,Infinity,pid);
+    if(v>bestV){ bestV=v; best=m; alpha=Math.max(alpha,v); }
+  }
+  return best;
+}
+
+// ── Render ────────────────────────────────────────────────────────
+const PAD=44, CELL=80, DR=5, EW=5, HIT=18;
+const C = {
+  paper:'#E9ECE5', ink:'#171B17', moss:'#3E6B52', amber:'#A8642B', glass:'#8199A0',
+  mossBox:'rgba(62,107,82,0.15)', amberBox:'rgba(168,100,43,0.15)'
+};
+const NS = 'http://www.w3.org/2000/svg';
+let edgeLines = {};
+
+function px(x){ return PAD+x*CELL; }
+function py(y){ return PAD+y*CELL; }
+
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for(const [k,v] of Object.entries(attrs)) e.setAttribute(k,v);
+  (parent||svg).appendChild(e);
+  return e;
+}
+
+function render(g) {
+  svg.innerHTML = '';
+  edgeLines = {};
+  const W=PAD*2+g.cols*CELL, H=PAD*2+g.rows*CELL;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  el('rect',{x:0,y:0,width:W,height:H,fill:C.paper});
+
+  // Boxes
+  for(let r=0;r<g.rows;r++) for(let c=0;c<g.cols;c++) {
+    const own = g.boxOwner[r][c];
+    if(!own) continue;
+    el('rect',{x:px(c)+3,y:py(r)+3,width:CELL-6,height:CELL-6,
+      fill:own===1?C.mossBox:C.amberBox,rx:6});
+    const t=el('text',{x:px(c)+CELL/2,y:py(r)+CELL/2,
+      'text-anchor':'middle','dominant-baseline':'central',
+      'font-family':'IBM Plex Mono,monospace','font-size':'13',
+      'font-weight':'500',fill:own===1?C.moss:C.amber,opacity:'0.65'});
+    t.textContent = own===1 ? 'you' : 'ai';
+  }
+
+  // H edges
+  for(let y=0;y<=g.rows;y++) for(let x=0;x<g.cols;x++) {
+    const played = g.hEdges[y][x];
+    const line = el('line',{x1:px(x)+DR,y1:py(y),x2:px(x+1)-DR,y2:py(y),
+      stroke: played?C.ink:C.glass,
+      'stroke-width': played?EW:2,
+      'stroke-linecap':'round', opacity: played?'1':'0.35'});
+    if(!played) {
+      edgeLines[`h-${x}-${y}`] = line;
+      const r=el('rect',{x:px(x)+DR,y:py(y)-HIT/2,width:CELL-DR*2,height:HIT,
+        fill:'transparent', cursor: canPlay?'pointer':'default',
+        'data-k':'h','data-x':x,'data-y':y});
+      if(canPlay) {
+        r.addEventListener('mouseenter',onHov);
+        r.addEventListener('mouseleave',onUnhov);
+        r.addEventListener('click',onClick);
+      }
+    }
+  }
+
+  // V edges
+  for(let y=0;y<g.rows;y++) for(let x=0;x<=g.cols;x++) {
+    const played = g.vEdges[y][x];
+    const line = el('line',{x1:px(x),y1:py(y)+DR,x2:px(x),y2:py(y+1)-DR,
+      stroke: played?C.ink:C.glass,
+      'stroke-width': played?EW:2,
+      'stroke-linecap':'round', opacity: played?'1':'0.35'});
+    if(!played) {
+      edgeLines[`v-${x}-${y}`] = line;
+      const r=el('rect',{x:px(x)-HIT/2,y:py(y)+DR,width:HIT,height:CELL-DR*2,
+        fill:'transparent', cursor: canPlay?'pointer':'default',
+        'data-k':'v','data-x':x,'data-y':y});
+      if(canPlay) {
+        r.addEventListener('mouseenter',onHov);
+        r.addEventListener('mouseleave',onUnhov);
+        r.addEventListener('click',onClick);
+      }
+    }
+  }
+
+  // Dots (on top)
+  for(let y=0;y<=g.rows;y++) for(let x=0;x<=g.cols;x++)
+    el('circle',{cx:px(x),cy:py(y),r:DR,fill:C.ink});
+}
+
+function setLineHov(k, x, y, on) {
+  const line = edgeLines[`${k}-${x}-${y}`];
+  if(!line) return;
+  line.setAttribute('stroke', on ? C.moss : C.glass);
+  line.setAttribute('stroke-width', on ? '4' : '2');
+  line.setAttribute('opacity', on ? '0.9' : '0.35');
+}
+
+function onHov(e)   { setLineHov(e.target.dataset.k, +e.target.dataset.x, +e.target.dataset.y, true); }
+function onUnhov(e) { setLineHov(e.target.dataset.k, +e.target.dataset.x, +e.target.dataset.y, false); }
+function onClick(e) { humanPlay([e.target.dataset.k, +e.target.dataset.x, +e.target.dataset.y]); }
+
+// ── Game flow ─────────────────────────────────────────────────────
+const svg    = document.getElementById('board');
+const elYou  = document.getElementById('score-you');
+const elAI   = document.getElementById('score-ai');
+const elStat = document.getElementById('status');
+const btn3   = document.getElementById('btn-3x3');
+const btn4   = document.getElementById('btn-4x4');
+const btnNew = document.getElementById('btn-new');
+
+let game=null, weights=null, canPlay=false, size=3, hard=true;
+
+function setStatus(t) { elStat.textContent = t; }
+function updateScores() { elYou.textContent=game.scores[1]; elAI.textContent=game.scores[2]; }
+
+function newGame() {
+  game = new Game(size, size);
+  canPlay = true;
+  hov = null;
+  updateScores();
+  setStatus('Your turn — click an edge to play');
+  render(game);
+}
+
+async function humanPlay(move) {
+  if(!canPlay || !game.isValid(move)) return;
+  canPlay = false;
+  hov = null;
+  game.apply(move);
+  updateScores();
+
+  if(game.done()) { endGame(); return; }
+
+  if(game.current === 1) {
+    canPlay = true;
+    setStatus('You completed a box — go again');
+    render(game);
+    return;
+  }
+  render(game);
+  await aiTurns();
+}
+
+const delay = ms => new Promise(r => setTimeout(r, ms));
+
+async function aiTurns() {
+  const W = weights ? weights[size+'x'+size] : null;
+  while(!game.done() && game.current===2) {
+    setStatus('AI thinking…');
+    await delay(hard ? 180 : 320);
+    const move = hard ? abPick(game) : agentPick(game, W);
+    game.apply(move);
+    updateScores();
+    if(game.current===2 && !game.done()) {
+      render(game);
+      setStatus('AI captured — playing again…');
+    }
+  }
+  if(game.done()) { endGame(); return; }
+  canPlay = true;
+  setStatus('Your turn');
+  render(game);
+}
+
+function endGame() {
+  canPlay = false;
+  render(game);
+  const w = game.winner();
+  setStatus(w===1 ? 'You won!' : w===2 ? 'AI wins.' : 'Draw.');
+}
+
+// ── Init ──────────────────────────────────────────────────────────
+const btnEasy = document.getElementById('btn-easy');
+const btnHard  = document.getElementById('btn-hard');
+
+btn3.addEventListener('click', () => { size=3; btn3.classList.add('active'); btn4.classList.remove('active'); newGame(); });
+btn4.addEventListener('click', () => { size=4; btn4.classList.add('active'); btn3.classList.remove('active'); newGame(); });
+btnEasy.addEventListener('click', () => {
+  if(!weights) return;
+  hard=false; btnEasy.classList.add('active'); btnHard.classList.remove('active'); newGame();
+});
+btnHard.addEventListener('click', () => {
+  hard=true; btnHard.classList.add('active'); btnEasy.classList.remove('active'); newGame();
+});
+btnNew.addEventListener('click', newGame);
+
+(async () => {
+  // render placeholder board while loading
+  game = new Game(3, 3);
+  render(game);
+  try {
+    const res = await fetch('weights.json');
+    weights = await res.json();
+    newGame();
+  } catch(e) {
+    setStatus('Failed to load model. Try refreshing.');
+  }
+})();
+</script>
+</body>
+</html>
