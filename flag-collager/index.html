@@ -155,6 +155,7 @@
 const FLAG_W    = 100;
 const FLAG_H    = 67;
 const THRESHOLD = 80;
+const MAX_R     = 5.0;   // frontier capped to this radius; ~81 positions max
 const SA_STEPS  = 50000;
 const T_START   = 120;
 const T_END     = 0.3;
@@ -247,8 +248,10 @@ function runGrowth(seed) {
     frontier.delete(c + ',' + r);
     const dx = [-1,1,0,0], dy = [0,0,-1,1];
     for (let d = 0; d < 4; d++) {
-      const k = (c+dx[d]) + ',' + (r+dy[d]);
-      if (!grid.has(k)) frontier.add(k);
+      const nc = c + dx[d], nr = r + dy[d];
+      if (!grid.has(nc + ',' + nr) && nc*nc + nr*nr <= MAX_R*MAX_R) {
+        frontier.add(nc + ',' + nr);
+      }
     }
   }
 
