@@ -9,20 +9,35 @@
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../style.css">
 <style>
-  .collage-frame {
+  .collage-wrap {
     margin: 2.5rem 0 0.75rem;
     border: 1px solid var(--glass);
-    background: var(--paper-deep);
-    padding: 0.6rem;
+    background: #aaa;
+    padding: 0.5rem;
     display: inline-block;
     max-width: 100%;
     vertical-align: top;
+    min-height: 6rem;
+    position: relative;
   }
-  .collage-frame img {
+  #collage-canvas {
     display: block;
     width: 100%;
+    max-width: 740px;
     height: auto;
-    max-width: 720px;
+  }
+  #collage-status {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    color: rgba(255,255,255,0.7);
+    background: rgba(0,0,0,0.35);
+    pointer-events: none;
   }
   .collage-controls {
     display: flex;
@@ -43,15 +58,12 @@
     cursor: pointer;
     transition: border-color 0.15s, color 0.15s, background 0.15s;
   }
-  #btn-regenerate:hover {
+  #btn-regenerate:hover:not(:disabled) {
     border-color: var(--moss);
     background: color-mix(in oklab, var(--moss) 8%, transparent);
   }
-  #btn-regenerate:disabled {
-    opacity: 0.45;
-    cursor: default;
-  }
-  #collage-seed {
+  #btn-regenerate:disabled { opacity: 0.4; cursor: default; }
+  #collage-info {
     font-family: var(--mono);
     font-size: 0.7rem;
     color: var(--glass);
@@ -77,8 +89,7 @@
   .steps li::before {
     content: counter(step);
     position: absolute;
-    left: 0;
-    top: 1.1rem;
+    left: 0; top: 1.1rem;
     font-family: var(--mono);
     font-size: 0.68rem;
     letter-spacing: 0.1em;
@@ -107,22 +118,23 @@
   <h1 class="page-title">Flag Collager</h1>
   <p class="lede">An organic flag mosaic grown by edge-color affinity, then rearranged by simulated annealing until neighboring borders agree.</p>
 
-  <div class="collage-frame">
-    <img id="collage-img" src="collage.png" alt="A mosaic of roughly 80 world and regional flags arranged so touching edges share similar colors" width="720">
+  <div class="collage-wrap">
+    <canvas id="collage-canvas" width="740" height="400"></canvas>
+    <div id="collage-status">Loading flags&hellip;</div>
   </div>
   <div class="collage-controls">
-    <button id="btn-regenerate">New layout</button>
-    <span id="collage-seed">seed 7 &middot; 79 flags</span>
+    <button id="btn-regenerate" disabled>New layout</button>
+    <span id="collage-info"></span>
   </div>
 
   <ol class="steps">
     <li>
       <strong>Edge sampling</strong>
-      Downloads ~265 flags and samples 20 pixels along each of their four edges, averaging into a color signature per side. Right edge of one flag is compared directly to the left edge of a potential neighbor.
+      Samples 20 pixels along each of the four edges of every flag, averaging into a single RGB color per side. The right edge of one flag is compared directly to the left edge of a potential neighbor.
     </li>
     <li>
       <strong>Pairwise distance matrix</strong>
-      Builds a 265&times;265 matrix of Euclidean distances in RGB space — one for horizontal pairings (right-vs-left) and one for vertical (bottom-vs-top). These are the only numbers the layout algorithm ever sees.
+      Builds a 265&times;265 matrix of Euclidean distances in RGB space — one for horizontal pairings (right-vs-left) and one for vertical (bottom-vs-top). These are the only numbers the layout algorithm sees.
     </li>
     <li>
       <strong>Organic growth</strong>
@@ -130,7 +142,7 @@
     </li>
     <li>
       <strong>Simulated annealing refinement</strong>
-      Randomly proposes pair-swaps and accepts them probabilistically: good swaps always accepted, bad ones accepted with probability <code>e&thinsp;&sup;&thinsp;&minus;&Delta;E/T</code> where temperature cools on a schedule. After 60,000 steps the layout has shuffled toward a local minimum of total edge mismatch.
+      Randomly proposes pair-swaps and accepts them probabilistically: good swaps always accepted, bad ones accepted with probability <code>e&thinsp;&sup;&thinsp;&minus;&Delta;E/T</code> where temperature cools on a schedule. After 30,000 steps the layout has settled toward a local minimum of total edge mismatch.
     </li>
   </ol>
 
@@ -139,34 +151,218 @@
 
 <script>
 (function () {
-  var collages = [
-    { src: 'collage.png',    label: 'seed 7 · 79 flags' },
-    { src: 'collage_13.png', label: 'seed 13 · 77 flags' },
-    { src: 'collage_23.png', label: 'seed 23 · 81 flags' },
-    { src: 'collage_55.png', label: 'seed 55 · 78 flags' },
-    { src: 'collage_88.png', label: 'seed 88 · 81 flags' },
-  ];
 
-  var current = 0;
-  var img = document.getElementById('collage-img');
-  var label = document.getElementById('collage-seed');
-  var btn = document.getElementById('btn-regenerate');
+const FLAG_W    = 100;
+const FLAG_H    = 67;
+const THRESHOLD = 80;
+const SA_STEPS  = 30000;
+const T_START   = 100;
+const T_END     = 0.5;
 
-  btn.addEventListener('click', function () {
-    btn.disabled = true;
-    var next = (current + 1) % collages.length;
-    var c = collages[next];
+function mulberry32(seed) {
+  return function () {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
 
-    var tmp = new Image();
-    tmp.onload = function () {
-      current = next;
-      img.src = c.src;
-      label.textContent = c.label;
-      btn.disabled = false;
-    };
-    tmp.onerror = function () { btn.disabled = false; };
-    tmp.src = c.src;
-  });
+function dist3(a, b) {
+  const dr = a[0]-b[0], dg = a[1]-b[1], db = a[2]-b[2];
+  return Math.sqrt(dr*dr + dg*dg + db*db);
+}
+
+let codes, N, hDist, vDist, imgs;
+
+async function init() {
+  const status = document.getElementById('collage-status');
+  const btn    = document.getElementById('btn-regenerate');
+
+  let edgeData;
+  try {
+    edgeData = await fetch('flag_edges.json').then(r => r.json());
+  } catch(e) {
+    status.textContent = 'Failed to load flag data.';
+    return;
+  }
+
+  codes = Object.keys(edgeData).sort();
+  N = codes.length;
+
+  // Build pairwise distance matrices
+  hDist = new Float32Array(N * N);
+  vDist = new Float32Array(N * N);
+  for (let i = 0; i < N; i++) {
+    const ei = edgeData[codes[i]];
+    for (let j = 0; j < N; j++) {
+      const ej = edgeData[codes[j]];
+      hDist[i*N+j] = dist3(ei.right,  ej.left);
+      vDist[i*N+j] = dist3(ei.bottom, ej.top);
+    }
+  }
+
+  // Preload flag images
+  status.textContent = 'Loading flag images…';
+  imgs = {};
+  await Promise.all(codes.map(code => new Promise(resolve => {
+    const img = new Image();
+    img.onload  = () => { imgs[code] = img; resolve(); };
+    img.onerror = resolve;
+    img.src = 'flags/' + code + '.png';
+  })));
+
+  status.style.display = 'none';
+  btn.disabled = false;
+  btn.addEventListener('click', () => generate((Math.random() * 999999) | 0));
+  generate((Math.random() * 999999) | 0);
+}
+
+function generate(seed) {
+  const btn  = document.getElementById('btn-regenerate');
+  const info = document.getElementById('collage-info');
+  btn.disabled = true;
+  info.textContent = 'computing…';
+
+  // Defer one frame so the UI updates before the synchronous work
+  setTimeout(() => {
+    const posArr = runGrowth(seed);
+    runSA(posArr, seed);
+    render(posArr, seed);
+    btn.disabled = false;
+  }, 16);
+}
+
+function runGrowth(seed) {
+  const rng     = mulberry32(seed);
+  const grid    = new Map();         // "c,r" -> code index
+  const placed  = new Uint8Array(N);
+  const frontier = new Set();
+
+  function gget(c, r) { return grid.get(c + ',' + r); }
+
+  function place(idx, c, r) {
+    grid.set(c + ',' + r, idx);
+    placed[idx] = 1;
+    frontier.delete(c + ',' + r);
+    const dx = [-1,1,0,0], dy = [0,0,-1,1];
+    for (let d = 0; d < 4; d++) {
+      const k = (c+dx[d]) + ',' + (r+dy[d]);
+      if (!grid.has(k)) frontier.add(k);
+    }
+  }
+
+  function scoreAt(idx, c, r) {
+    let total = 0, cnt = 0, nb;
+    if ((nb = gget(c-1, r)) !== undefined) { total += hDist[nb*N+idx];   cnt++; }
+    if ((nb = gget(c+1, r)) !== undefined) { total += hDist[idx*N+nb];   cnt++; }
+    if ((nb = gget(c, r-1)) !== undefined) { total += vDist[nb*N+idx];   cnt++; }
+    if ((nb = gget(c, r+1)) !== undefined) { total += vDist[idx*N+nb];   cnt++; }
+    return cnt > 0 ? total / cnt : 999;
+  }
+
+  // Seed flag
+  place((rng() * N) | 0, 0, 0);
+
+  while (frontier.size > 0) {
+    let bestScore = THRESHOLD, bestIdx = -1, bestC = 0, bestR = 0;
+
+    for (const pos of frontier) {
+      const comma = pos.indexOf(',');
+      const c = +pos.slice(0, comma), r = +pos.slice(comma+1);
+      for (let idx = 0; idx < N; idx++) {
+        if (placed[idx]) continue;
+        const s = scoreAt(idx, c, r);
+        if (s < bestScore) { bestScore = s; bestIdx = idx; bestC = c; bestR = r; }
+      }
+    }
+
+    if (bestIdx === -1) break;
+    place(bestIdx, bestC, bestR);
+  }
+
+  const posArr = [];
+  for (const [key, idx] of grid) {
+    const comma = key.indexOf(',');
+    posArr.push({ c: +key.slice(0, comma), r: +key.slice(comma+1), idx });
+  }
+  return posArr;
+}
+
+function runSA(posArr, seed) {
+  const rng = mulberry32(seed ^ 0xdeadbeef);
+  const pn  = posArr.length;
+  const posMap = new Map(posArr.map((p, i) => [p.c + ',' + p.r, i]));
+
+  function posScore(i) {
+    const p = posArr[i];
+    let total = 0, nb;
+    if ((nb = posMap.get((p.c-1)+','+p.r)) !== undefined) total += hDist[posArr[nb].idx*N + p.idx];
+    if ((nb = posMap.get((p.c+1)+','+p.r)) !== undefined) total += hDist[p.idx*N + posArr[nb].idx];
+    if ((nb = posMap.get(p.c+','+(p.r-1))) !== undefined) total += vDist[posArr[nb].idx*N + p.idx];
+    if ((nb = posMap.get(p.c+','+(p.r+1))) !== undefined) total += vDist[p.idx*N + posArr[nb].idx];
+    return total;
+  }
+
+  const cooling = Math.pow(T_END / T_START, 1 / SA_STEPS);
+  let T = T_START;
+
+  for (let step = 0; step < SA_STEPS; step++) {
+    const i = (rng() * pn) | 0;
+    const j = (rng() * pn) | 0;
+    if (i === j) { T *= cooling; continue; }
+
+    const old_i = posScore(i);
+    const old_j = posScore(j);
+
+    const tmp = posArr[i].idx;
+    posArr[i].idx = posArr[j].idx;
+    posArr[j].idx = tmp;
+
+    const delta = (posScore(i) + posScore(j)) - (old_i + old_j);
+
+    if (delta >= 0 && rng() >= Math.exp(-delta / T)) {
+      posArr[j].idx = posArr[i].idx;
+      posArr[i].idx = tmp;
+    }
+
+    T *= cooling;
+  }
+}
+
+function render(posArr, seed) {
+  const canvas = document.getElementById('collage-canvas');
+  const info   = document.getElementById('collage-info');
+
+  if (posArr.length === 0) {
+    info.textContent = 'No flags placed.';
+    return;
+  }
+
+  let minC = Infinity, maxC = -Infinity, minR = Infinity, maxR = -Infinity;
+  for (const p of posArr) {
+    if (p.c < minC) minC = p.c; if (p.c > maxC) maxC = p.c;
+    if (p.r < minR) minR = p.r; if (p.r > maxR) maxR = p.r;
+  }
+
+  canvas.width  = (maxC - minC + 1) * FLAG_W;
+  canvas.height = (maxR - minR + 1) * FLAG_H;
+
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#aaaaaa';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  for (const p of posArr) {
+    const img = imgs[codes[p.idx]];
+    if (!img) continue;
+    ctx.drawImage(img, (p.c - minC) * FLAG_W, (p.r - minR) * FLAG_H, FLAG_W, FLAG_H);
+  }
+
+  info.textContent = 'seed ' + seed + ' · ' + posArr.length + ' flags';
+}
+
+init();
+
 })();
 </script>
 </body>
