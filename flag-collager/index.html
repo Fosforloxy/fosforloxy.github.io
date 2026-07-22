@@ -116,7 +116,7 @@
 <div class="wrap">
   <a class="back" href="../">&larr; Catalog</a>
   <h1 class="page-title">Flag Collager</h1>
-  <p class="lede">An organic flag mosaic grown by edge-color affinity, then rearranged by simulated annealing until neighboring borders agree.</p>
+  <p class="lede">World flags packed into a dense disc by edge-color affinity, then refined by simulated annealing until neighboring borders agree.</p>
 
   <div class="collage-wrap">
     <canvas id="collage-canvas" width="740" height="400"></canvas>
@@ -137,8 +137,8 @@
       Builds a 265&times;265 matrix of Euclidean distances in RGB space — one for horizontal pairings (right-vs-left) and one for vertical (bottom-vs-top). These are the only numbers the layout algorithm sees.
     </li>
     <li>
-      <strong>Organic growth</strong>
-      Picks a seed flag and expands outward one flag at a time. Each candidate position scores every unplaced flag; whichever fits best (lowest average mismatch to existing neighbors) is placed there. Growth stops when the best available match exceeds a quality threshold — the algorithm refuses to place a flag that would visibly clash.
+      <strong>Disc packing</strong>
+      Places flags into a pre-defined circular arrangement (~80 positions), filling from the center outward. At each step, every unplaced flag is scored against its already-placed neighbors; the best fit is chosen. Working inward-to-outward ensures every position has neighbors to match against before it is filled, and the fixed disc shape guarantees a dense, gap-free collage.
     </li>
     <li>
       <strong>Simulated annealing refinement</strong>
@@ -152,12 +152,12 @@
 <script>
 (function () {
 
-const FLAG_W    = 100;
-const FLAG_H    = 67;
-const THRESHOLD = 80;
-const SA_STEPS  = 30000;
-const T_START   = 100;
-const T_END     = 0.5;
+const FLAG_W   = 100;
+const FLAG_H   = 67;
+const DISC_R   = 5;
+const SA_STEPS = 50000;
+const T_START  = 120;
+const T_END    = 0.3;
 
 function mulberry32(seed) {
   return function () {
@@ -234,51 +234,48 @@ function generate(seed) {
 }
 
 function runGrowth(seed) {
-  const rng     = mulberry32(seed);
-  const grid    = new Map();         // "c,r" -> code index
-  const placed  = new Uint8Array(N);
-  const frontier = new Set();
+  const rng = mulberry32(seed);
 
-  function gget(c, r) { return grid.get(c + ',' + r); }
-
-  function place(idx, c, r) {
-    grid.set(c + ',' + r, idx);
-    placed[idx] = 1;
-    frontier.delete(c + ',' + r);
-    const dx = [-1,1,0,0], dy = [0,0,-1,1];
-    for (let d = 0; d < 4; d++) {
-      const k = (c+dx[d]) + ',' + (r+dy[d]);
-      if (!grid.has(k)) frontier.add(k);
+  // Pre-define a solid disc of radius DISC_R, sorted innermost-first.
+  // This guarantees a dense, gap-free shape before any flag is placed.
+  const positions = [];
+  for (let c = -DISC_R; c <= DISC_R; c++) {
+    for (let r = -DISC_R; r <= DISC_R; r++) {
+      const d2 = c*c + r*r;
+      if (d2 <= DISC_R*DISC_R) positions.push({ c, r, d2 });
     }
   }
+  positions.sort((a, b) => a.d2 - b.d2 || a.c - b.c || a.r - b.r);
+
+  const grid   = new Map();
+  const placed = new Uint8Array(N);
 
   function scoreAt(idx, c, r) {
     let total = 0, cnt = 0, nb;
-    if ((nb = gget(c-1, r)) !== undefined) { total += hDist[nb*N+idx];   cnt++; }
-    if ((nb = gget(c+1, r)) !== undefined) { total += hDist[idx*N+nb];   cnt++; }
-    if ((nb = gget(c, r-1)) !== undefined) { total += vDist[nb*N+idx];   cnt++; }
-    if ((nb = gget(c, r+1)) !== undefined) { total += vDist[idx*N+nb];   cnt++; }
+    if ((nb = grid.get((c-1)+','+r)) !== undefined) { total += hDist[nb*N+idx];   cnt++; }
+    if ((nb = grid.get((c+1)+','+r)) !== undefined) { total += hDist[idx*N+nb];   cnt++; }
+    if ((nb = grid.get(c+','+(r-1))) !== undefined) { total += vDist[nb*N+idx];   cnt++; }
+    if ((nb = grid.get(c+','+(r+1))) !== undefined) { total += vDist[idx*N+nb];   cnt++; }
     return cnt > 0 ? total / cnt : 999;
   }
 
-  // Seed flag
-  place((rng() * N) | 0, 0, 0);
+  // Seed: random flag at the center
+  const seedIdx = (rng() * N) | 0;
+  grid.set('0,0', seedIdx);
+  placed[seedIdx] = 1;
 
-  while (frontier.size > 0) {
-    let bestScore = THRESHOLD, bestIdx = -1, bestC = 0, bestR = 0;
-
-    for (const pos of frontier) {
-      const comma = pos.indexOf(',');
-      const c = +pos.slice(0, comma), r = +pos.slice(comma+1);
-      for (let idx = 0; idx < N; idx++) {
-        if (placed[idx]) continue;
-        const s = scoreAt(idx, c, r);
-        if (s < bestScore) { bestScore = s; bestIdx = idx; bestC = c; bestR = r; }
-      }
+  // Fill remaining disc positions from inside out, greedily best-fit each
+  for (let pi = 1; pi < positions.length; pi++) {
+    const { c, r } = positions[pi];
+    let bestScore = Infinity, bestIdx = -1;
+    for (let idx = 0; idx < N; idx++) {
+      if (placed[idx]) continue;
+      const s = scoreAt(idx, c, r);
+      if (s < bestScore) { bestScore = s; bestIdx = idx; }
     }
-
-    if (bestIdx === -1) break;
-    place(bestIdx, bestC, bestR);
+    if (bestIdx < 0) break;
+    grid.set(c + ',' + r, bestIdx);
+    placed[bestIdx] = 1;
   }
 
   const posArr = [];
