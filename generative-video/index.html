@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Birds of Paradise — Finn Mulligan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+<style>
+  .video-frame {
+    margin: 2.5rem 0 0.5rem;
+    border: 1px solid var(--glass);
+    background: #0a0a0a;
+    padding: 0.6rem;
+    display: inline-block;
+    max-width: 100%;
+  }
+  .video-frame video {
+    display: block;
+    width: 100%;
+    max-width: 780px;
+    height: auto;
+  }
+  .video-caption {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    color: var(--glass);
+    margin: 0.6rem 0 2.5rem;
+  }
+  .prize-tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--moss);
+    border: 1px solid color-mix(in oklab, var(--moss) 40%, transparent);
+    padding: 3px 10px;
+    border-radius: 3px;
+    margin-bottom: 1.25rem;
+  }
+  .prose {
+    max-width: var(--measure);
+    color: var(--ink-soft);
+    font-size: 1rem;
+    line-height: 1.65;
+  }
+  .prose p { margin: 0 0 1rem; }
+  .prose p:last-child { margin: 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="../">&larr; Catalog</a>
+  <h1 class="page-title">Birds of Paradise</h1>
+
+  <div class="prize-tag">ByCloud 2021 Generative Video Competition &mdash; 1st place &middot; $200</div>
+
+  <div class="video-frame">
+    <video controls loop preload="metadata">
+      <source src="Bird_Bali.mp4" type="video/mp4">
+    </video>
+  </div>
+  <p class="video-caption">Bird_Bali &middot; 2021 &middot; Disco Diffusion</p>
+
+  <div class="prose">
+    <p>Winner of the ByCloud 2021 Generative Video Competition. Source footage was a hand performing butterfly knife flips, fed frame-by-frame into Disco Diffusion &mdash; an early open-source diffusion model distributed as a shared Google Colab notebook, before dedicated interfaces existed &mdash; with prompts directing it toward birds of paradise. The model re-renders each frame independently, so the motion that remains is wholly the knife&rsquo;s; everything else dissolves into plumage.</p>
+    <p>Disco Diffusion predates Stable Diffusion and DALL&middot;E by about a year. Running it meant queuing shared GPU time in a Colab session and editing the prompt directly in the notebook. The competition was one of the first to recognize work made this way.</p>
+  </div>
+
+  <footer>Finn Mulligan &middot; New York</footer>
+</div>
+</body>
+</html>
