@@ -174,19 +174,19 @@ function RPS3D() {
   const animFrameRef = useRef(null);
   const lastStepRef = useRef(0);
 
-  const [playing, setPlaying] = useState(false);
+  const [playing, setPlaying] = useState(true);
   const [gridSize, setGridSize] = useState(16);
   const [speed, setSpeed] = useState(180);
   const [generation, setGeneration] = useState(0);
   const [counts, setCounts] = useState({});
   const [theme, setTheme] = useState("Neon Triad");
   const [density, setDensity] = useState(0.35);
-  const [threshold, setThreshold] = useState(3);
+  const [threshold, setThreshold] = useState(4);
   const [neighborhood, setNeighborhood] = useState("moore");
   const [autoRotate, setAutoRotate] = useState(true);
   const [showBounds, setShowBounds] = useState(true);
   const [cubeShape, setCubeShape] = useState("cube");
-  const [numStates, setNumStates] = useState(3);
+  const [numStates, setNumStates] = useState(5);
   const [hiddenStates, setHiddenStates] = useState(new Set());
 
   const playingRef = useRef(playing);
