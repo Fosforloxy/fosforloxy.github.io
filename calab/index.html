@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CALab — Emergence Lab</title>
+<style>
+  :root{
+    --bg:#0a0c14; --ink:#e7e2d7; --mute:#8b8f9b; --dim:#565a66;
+    --line:rgba(231,226,215,.09); --panel:rgba(14,17,26,.84); --field:rgba(231,226,215,.05);
+    --ok:#9fd59f; --warn:#ffb86b;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);
+    font:13px/1.45 "Avenir Next","Segoe UI",system-ui,-apple-system,sans-serif;overflow:hidden}
+  #stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+  #world{image-rendering:pixelated;image-rendering:crisp-edges;box-shadow:0 0 0 1px rgba(231,226,215,.1),0 30px 80px rgba(0,0,0,.6);cursor:crosshair;touch-action:none}
+  #tip{position:fixed;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:4px 8px;font-size:11px;display:none;z-index:6;white-space:nowrap;backdrop-filter:blur(8px)}
+  .panel{position:fixed;top:0;bottom:0;width:350px;padding:18px 16px 40px;overflow-y:auto;
+    background:var(--panel);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    scrollbar-width:thin;scrollbar-color:var(--dim) transparent;transition:transform .25s ease}
+  #controls{left:0;border-right:1px solid var(--line)}
+  #observatory{right:0;width:360px;border-left:1px solid var(--line)}
+  .panel.hidden#controls{transform:translateX(-100%)}
+  .panel.hidden#observatory{transform:translateX(100%)}
+  h1{font-size:19px;font-weight:600;letter-spacing:-.01em;margin:0 0 2px}
+  .sub{color:var(--mute);margin:0 0 18px;font-size:12px}
+  h2{font-size:12px;font-weight:600;color:var(--mute);margin:22px 0 8px;letter-spacing:.02em}
+  h3{font-size:12px;font-weight:600;margin:16px 0 6px;color:var(--mute)}
+  .row{display:flex;gap:8px;align-items:center;margin:6px 0}
+  .row label{color:var(--mute);min-width:84px;font-size:12px}
+  .row .v{color:var(--ink);min-width:40px;text-align:right;font-variant-numeric:tabular-nums;font-size:12px}
+  input[type=range]{flex:1;accent-color:#c9c2b3;height:20px;min-width:60px}
+  select,input[type=text],input[type=number],textarea{background:var(--field);color:var(--ink);border:1px solid var(--line);
+    border-radius:4px;padding:4px 6px;font:inherit;font-size:12px}
+  select:focus,input:focus,textarea:focus,button:focus-visible{outline:1px solid #c9c2b3;outline-offset:1px}
+  input[type=text]{width:100%}
+  input[type=number]{width:56px}
+  input[type=checkbox]{accent-color:#c9c2b3}
+  button{background:var(--field);color:var(--ink);border:1px solid var(--line);border-radius:4px;
+    padding:6px 10px;font:inherit;font-size:12px;cursor:pointer}
+  button:hover{background:rgba(231,226,215,.1)}
+  button.primary{background:var(--ink);color:#0a0c14;border-color:transparent;font-weight:600}
+  button.primary:hover{background:#fff}
+  button.on{background:rgba(231,226,215,.18)}
+  .btns{display:flex;gap:6px;flex-wrap:wrap}
+  .btns button{flex:1}
+  .chk{display:flex;gap:5px;align-items:center;color:var(--mute);font-size:12px;min-width:auto!important}
+  /* species list */
+  .sp{border-top:1px solid var(--line);padding:9px 0;display:flex;align-items:center;gap:8px;cursor:pointer}
+  .sp:hover{background:rgba(231,226,215,.03)}
+  .sp .sw{width:14px;height:14px;border-radius:3px;box-shadow:0 0 10px currentColor;flex:none}
+  .sp .name{font-weight:600;min-width:58px}
+  .sp .rule{color:var(--mute);font-size:11px;flex:1;font-variant-numeric:tabular-nums;line-height:1.3}
+  .sp .pop{color:var(--mute);font-size:11px;font-variant-numeric:tabular-nums;min-width:44px;text-align:right}
+  .sp button.mini{padding:2px 7px;font-size:11px;flex:none}
+  .lib{display:flex;align-items:center;gap:6px;padding:4px 0;border-top:1px solid var(--line);font-size:12px}
+  .lib .sw{width:10px;height:10px;border-radius:2px;flex:none}
+  .lib .name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .lib .k{color:var(--dim);font-size:11px;flex:none}
+  .lib button{padding:1px 6px;font-size:11px;flex:none}
+  /* inspector */
+  #inspector{display:none}
+  #inspector .top{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  #inspector .top .nm{font-size:17px;font-weight:600;background:none;border:none;color:inherit;width:120px;padding:2px 4px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px}
+  .grid2 label,.grid1 label{display:flex;flex-direction:column;gap:2px;color:var(--mute);font-size:11px}
+  .grid2 label.inl{flex-direction:row;align-items:center;gap:6px}
+  .grid2 input[type=text],.grid2 select{width:100%}
+  .nbwrap{display:flex;gap:12px;align-items:flex-start}
+  canvas.nb{width:143px;height:143px;border-radius:4px;background:rgba(0,0,0,.3);cursor:pointer;flex:none}
+  .states{display:flex;gap:2px;margin:6px 0 2px;height:22px}
+  .states i{flex:1;border-radius:2px;display:block}
+  .compass{display:grid;grid-template-columns:repeat(3,26px);gap:3px;margin-top:6px}
+  .compass button{padding:0;height:26px;font-size:11px}
+  .compass .c{background:none;border-color:transparent;color:var(--dim);cursor:default}
+  input[type=color]{width:24px;height:20px;padding:0;border:none;background:none;cursor:pointer}
+  /* matrices */
+  table.mx{border-collapse:collapse;font-size:11px;font-variant-numeric:tabular-nums;margin-top:4px}
+  table.mx th,table.mx td{padding:2px 3px;text-align:center}
+  table.mx th{font-weight:500;color:var(--mute)}
+  table.mx th.r{text-align:right;padding-right:6px}
+  table.mx input[type=number]{width:40px;padding:2px 3px;text-align:center}
+  table.mx td.d input{color:var(--mute)}
+  .hint{color:var(--dim);font-size:11px;margin-top:6px;line-height:1.4}
+  /* observatory */
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;margin:4px 0 10px}
+  .stat{display:flex;justify-content:space-between;border-bottom:1px dotted var(--line);padding:3px 0}
+  .stat span:first-child{color:var(--mute)}
+  .stat span:last-child{font-variant-numeric:tabular-nums}
+  .stat.wide{grid-column:1/-1}
+  canvas.chart{width:100%;height:78px;display:block;border-radius:4px;background:rgba(0,0,0,.25)}
+  .legend{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:11px;color:var(--mute);margin:4px 0 8px}
+  .legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px}
+  #log{font-size:12px;line-height:1.5}
+  #log .e{padding:4px 0;border-bottom:1px solid var(--line);display:flex;gap:8px}
+  #log .e .t{color:var(--dim);font-variant-numeric:tabular-nums;min-width:44px;flex:none}
+  #log .e.rare .t{color:var(--warn)}
+  #log b{font-weight:600}
+  #log em{font-style:normal;color:var(--mute)}
+  #empty{color:var(--dim);padding:8px 0}
+  #toggles{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:5}
+  #toggles button{background:var(--panel);backdrop-filter:blur(10px)}
+  #io{display:none;position:fixed;inset:0;background:rgba(4,5,10,.7);z-index:9;align-items:center;justify-content:center}
+  #io.show{display:flex}
+  #io .box{width:min(640px,92vw);background:#0f121b;border:1px solid var(--line);border-radius:8px;padding:16px}
+  #io textarea{width:100%;height:320px;font:11px/1.4 ui-monospace,Menlo,monospace;resize:vertical}
+  kbd{background:var(--field);border:1px solid var(--line);border-radius:3px;padding:0 4px;font-size:11px}
+  @media (prefers-reduced-motion:reduce){.panel{transition:none}}
+  @media (max-width:900px){.panel{width:min(350px,88vw)}#observatory{width:min(360px,88vw)}}
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="world"></canvas></div>
+<div id="tip"></div>
+
+<aside id="controls" class="panel">
+  <div id="overview">
+    <a href="../" style="display:inline-block;margin-bottom:12px;color:var(--ink);font-size:14px;text-underline-offset:3px">&larr; All projects</a>
+    <h1>CALab <span style="font-size:13px;font-weight:400;color:var(--mute)">/ Emergence Lab</span></h1>
+    <p class="sub">Several species on one 2D grid. Hover a cell to read it, drag to paint, <kbd>space</kbd> pauses.</p>
+
+    <h2>World</h2>
+    <div class="btns">
+      <button id="bPlay" class="primary">Pause</button>
+      <button id="bStep">Step</button>
+      <button id="bReset">Reseed</button>
+      <button id="bRandomize">Randomize all</button>
+    </div>
+    <div id="notice" class="hint" style="display:none;margin:6px 0 0;color:var(--warn)"></div>
+    <div class="row"><label>Speed</label><input id="speed" type="range" min="1" max="60" value="20"><span class="v" id="speedV">20/s</span></div>
+    <div class="row"><label>Size</label>
+      <select id="size"><option>96</option><option>128</option><option selected>160</option><option>200</option><option>256</option></select>
+      <label style="min-width:auto">Layout</label>
+      <select id="pattern"><option value="blobs" selected>Colonies</option><option value="random">Mixed soup</option><option value="layers">Strata</option><option value="core">Central core</option><option value="ring">Ring of colonies</option><option value="empty">Empty (paint)</option></select>
+    </div>
+    <div class="row"><label>Seed</label><input id="seed" type="number" value="1337" style="width:80px"><button id="bRandSeed">New</button>
+      <label style="min-width:auto">Edges</label><select id="wrap"><option value="1" selected>wrap</option><option value="0">walls</option></select></div>
+    <div class="row"><label>Brush</label><select id="brush"></select><label class="chk"><input id="showDecay" type="checkbox" checked>show decaying</label></div>
+
+    <h2>Species — click one to inspect</h2>
+    <div id="species"></div>
+    <div class="btns" style="margin-top:8px"><button id="bAddRandom">Add a random species</button></div>
+
+    <h2 id="libHead" style="cursor:pointer;user-select:none">Library <span id="libCount" style="font-weight:400"></span> <span id="libArrow" style="float:right">▾</span></h2>
+    <div id="libBody">
+    <div id="library"></div>
+    <div class="btns" style="margin-top:8px"><button id="bLibExport">Export library</button><button id="bLibImport">Import library</button><button id="bLibReset">Restore built-ins</button></div>
+    <p class="hint" id="libNote">Tick agents to enter them in the arena. "Add" drops a copy into the current world.</p>
+    </div>
+
+    <h2>Arena — ticked agents face off</h2>
+    <div class="row"><label>Layout</label><select id="arenaLayout"><option value="ring" selected>Ring of colonies</option><option value="layers">Strata</option><option value="blobs">Scattered colonies</option><option value="random">Mixed soup</option></select></div>
+    <div class="row"><label>Strangers</label><select id="arenaStance"><option value="own">each agent's own stance</option><option value="0">all ignore each other</option><option value="-1">all repel</option><option value="0.5">all half-kin</option></select></div>
+    <div class="btns"><button id="bArena" class="primary">Start arena</button></div>
+
+    <h2>Affinity — how much a neighbour of each species counts</h2>
+    <div id="affinity"></div>
+    <p class="hint">Rows decide, columns are neighbours. 1 = kin, 0 = ignored, negative = repels. Summed then rounded before the birth/survival check.</p>
+
+    <h2>Predation — row consumes column</h2>
+    <div id="predation"></div>
+    <p class="hint">A living prey cell begins to decay when at least <i>k</i> predator cells sit in the prey's own neighbourhood.</p>
+
+    <h2>Explore</h2>
+    <div class="btns"><button id="bMutate">Mutate rules</button></div>
+    <div class="btns" style="margin-top:6px"><button id="bExport">Export config</button><button id="bImport">Import config</button><button id="bDefaults">Defaults</button></div>
+  </div>
+
+  <div id="inspector">
+    <div class="top">
+      <button id="iBack">‹ All species</button>
+      <input type="color" id="iColor">
+      <input class="nm" id="iName">
+      <label class="chk"><input type="checkbox" id="iEnabled">on</label>
+      <button id="iFocus" title="Dim every other species in the view">Focus</button>
+    </div>
+    <div class="btns" style="margin:6px 0"><button id="iSave">Save to library</button><button id="iRemove">Remove from world</button></div>
+    <div class="row"><span id="iLive" class="hint" style="margin:0"></span></div>
+    <canvas id="iSpark" class="chart" style="height:44px"></canvas>
+
+    <h3>Neighbourhood <span id="iK" style="font-weight:400"></span></h3>
+    <div class="nbwrap">
+      <canvas class="nb" id="iNb" width="286" height="286"></canvas>
+      <div class="grid1" style="flex:1;display:flex;flex-direction:column;gap:6px">
+        <label>Shape <select id="iShape">
+          <option value="moore">Moore (square)</option><option value="vn">von Neumann (diamond)</option>
+          <option value="circle">Disc</option><option value="ring">Ring</option><option value="cross">Cross (+)</option>
+          <option value="x">Diagonals (×)</option><option value="hline">Horizontal line</option><option value="vline">Vertical line</option>
+          <option value="front">Front half (faces up)</option><option value="knight">Knight moves</option>
+          <option value="star">Star (+ and ×)</option><option value="hollow">Hollow square</option><option value="checker">Checkerboard</option>
+          <option value="crescent">Crescent</option><option value="hook">Hook (spiral arm)</option><option value="corners">Four corners</option>
+          <option value="custom">Custom (draw it)</option>
+        </select></label>
+        <div class="btns"><button id="iGenIdenticon" title="Mirror-symmetric random pattern, like a GitHub identicon">Identicon</button><button id="iGenSym" title="Four-fold symmetric random pattern">Symmetric</button><button id="iGenRandom" title="Fully random scatter">Scatter</button></div>
+        <label>Radius <span id="iRv"></span><input type="range" id="iR" min="1" max="6" value="1"></label>
+        <label>Inner radius <span id="iR2v"></span><input type="range" id="iR2" min="0" max="5" value="0"></label>
+        <span class="hint" style="margin:0">Click cells to draw your own shape. The centre is the cell itself.</span>
+      </div>
+    </div>
+
+    <h3>Rules</h3>
+    <div class="grid2">
+      <label>Birth when count is <input type="text" id="iBirth"></label>
+      <label>Survive when count is <input type="text" id="iSurvive"></label>
+      <label>Birth chance <span id="iBirthPv"></span><input type="range" id="iBirthP" min="0.05" max="1" step="0.05"></label>
+      <label>Random death per step <span id="iMortv"></span><input type="range" id="iMort" min="0" max="0.2" step="0.005"></label>
+      <label>Lifespan (0 = none) <input type="number" id="iLife" min="0" max="2000"></label>
+      <label>Spontaneous spawn <span id="iSpawnv"></span><input type="range" id="iSpawn" min="0" max="1" step="0.02"></label>
+    </div>
+
+    <h3>States and decay</h3>
+    <div class="states" id="iStates"></div>
+    <div class="grid2">
+      <label>Number of states <input type="number" id="iNStates" min="2" max="32"></label>
+      <label>Decay <select id="iDecay"></select></label>
+      <label>Smoulder chance <span id="iDecayPv"></span><input type="range" id="iDecayP" min="0.02" max="1" step="0.02"></label>
+      <label class="inl" style="margin-top:12px"><input type="checkbox" id="iGhosts">decaying cells count as neighbours</label>
+      <label class="inl"><input type="checkbox" id="iMono">monochrome fade</label>
+      <label>Seed density <span id="iDensv"></span><input type="range" id="iDens" min="0.02" max="0.9" step="0.02"></label>
+    </div>
+
+    <h3>Growth — where new cells may appear</h3>
+    <div class="grid2">
+      <label>Mode <select id="iGrowth">
+        <option value="free">Anywhere the rule allows</option>
+        <option value="fixed">Only in one direction</option>
+        <option value="drift">Wandering direction</option>
+        <option value="straight">Keep the parent's direction</option>
+        <option value="zigzag">Never the same direction twice</option>
+        <option value="spiral">Turn clockwise each generation</option>
+        <option value="spiralccw">Turn anticlockwise each generation</option>
+        <option value="toward">Toward higher density of…</option>
+        <option value="away">Away from density of…</option>
+      </select></label>
+      <label>Target <select id="iTarget"></select></label>
+      <label>Spread <span id="iSpreadv"></span><input type="range" id="iSpread" min="0" max="3" step="1"></label>
+      <label>Wander period <input type="number" id="iPeriod" min="1" max="500"></label>
+    </div>
+    <div class="compass" id="iCompass"></div>
+    <p class="hint">Directional and gradient modes need a living parent of this species in one of the 8 adjacent cells; the new cell's direction is parent→child. Spread widens the allowed cone in 45° steps. Density is measured over a 7×7 window.</p>
+
+    <h3>Relations</h3>
+    <div class="grid2" style="margin-bottom:6px">
+      <label>Default weight for strangers <input type="number" id="iStance" step="0.5" min="-2" max="2"></label>
+      <label class="inl" style="margin-top:12px"><input type="checkbox" id="iCarn">eats strangers by default</label>
+    </div>
+    <p class="hint" style="margin:0 0 6px">Used when this agent meets others in the arena or is added to a world. The table below is the live matrix for this world.</p>
+    <div id="iRel"></div>
+  </div>
+</aside>
+
+<aside id="observatory" class="panel">
+  <h1>Observatory</h1>
+  <p class="sub">Live measurements and a field log of notable events.</p>
+  <div class="stats">
+    <div class="stat"><span>Step</span><span id="sStep">0</span></div>
+    <div class="stat"><span>Rate</span><span id="sRate">–</span></div>
+    <div class="stat"><span>Occupied</span><span id="sAlive">0</span></div>
+    <div class="stat"><span>Activity</span><span id="sAct">0%</span></div>
+    <div class="stat"><span>Contact</span><span id="sContact">0%</span></div>
+    <div class="stat"><span>Diversity</span><span id="sDiv">0 bits</span></div>
+    <div class="stat"><span>Interesting run</span><span id="sRun">0</span></div>
+    <div class="stat"><span>Longest run</span><span id="sLongest">0</span></div>
+    <div class="stat wide"><span>State</span><span id="sState">seeding</span></div>
+  </div>
+  <h2>Population by species (living cells)</h2>
+  <canvas id="cPop" class="chart"></canvas>
+  <div class="legend" id="legend"></div>
+  <h2>Activity and contact</h2>
+  <canvas id="cAct" class="chart"></canvas>
+  <div class="legend"><span><i style="background:#e7e2d7"></i>changed cells</span><span><i style="background:#ffb86b"></i>cells touching another species</span></div>
+  <h2>Interest index</h2>
+  <canvas id="cInt" class="chart"></canvas>
+  <p class="hint">Heuristic: 1 while activity sits in the 0.15–28% band with no detected cycle, scaled by contact and diversity. A run is consecutive steps above zero.</p>
+  <h2>Field log</h2>
+  <div id="log"><div id="empty">Nothing yet.</div></div>
+</aside>
+
+<div id="toggles"><button id="tL">Controls</button><button id="tR">Observatory</button></div>
+<div id="io"><div class="box">
+  <h2 style="margin-top:0" id="ioTitle">Configuration</h2>
+  <textarea id="ioText" spellcheck="false"></textarea>
+  <div class="btns" style="margin-top:10px"><button id="ioApply" class="primary">Apply and reseed</button><button id="ioClose">Close</button></div>
+</div></div>
+
+<script>
+// ───────────────────────── utilities ─────────────────────────
+const $=s=>document.querySelector(s), $$=(s,r=document)=>Array.from(r.querySelectorAll(s));
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function parseSet(str,K){const set=new Uint8Array(K+1);String(str).split(/[,\s]+/).forEach(tok=>{if(!tok)return;const r=tok.split('-');let a=+r[0],b=r.length>1?+r[1]:a;if(isNaN(a)||isNaN(b))return;for(let v=Math.max(0,a);v<=Math.min(K,b);v++)set[v]=1;});return set;}
+function setToStr(set){const p=[];let v=0;while(v<set.length){if(set[v]){let e=v;while(e+1<set.length&&set[e+1])e++;p.push(e>v?v+'-'+e:''+v);v=e+1;}else v++;}return p.join(',')||'none';}
+const fmt=n=>n.toLocaleString();
+const pct=(a,b)=>b?((100*a/b).toFixed(a/b<0.01?2:1)+'%'):'0%';
+function hexRGB(h){const c=parseInt(h.slice(1),16);return[(c>>16)&255,(c>>8)&255,c&255];}
+const DX=[0,0,1,1,1,0,-1,-1,-1], DY=[0,-1,-1,0,1,1,1,0,-1], DNAME=['·','N','NE','E','SE','S','SW','W','NW'];
+const RM=8, DR=3; // max radius, density window radius
+
+// ───────────────────────── configuration ─────────────────────────
+const DECAY_MODES={linear:0,stochastic:1,crowd:2,revive:3};
+const DECAY_LABEL={linear:'steady',stochastic:'smoulder (random)',crowd:'faster when crowded',revive:'can reignite'};
+const GROWTH_MODES={free:0,fixed:1,drift:2,straight:3,zigzag:4,spiral:5,spiralccw:6,toward:7,away:8};
+const GROWTH_SHORT={free:'free',fixed:'one-way',drift:'wandering',straight:'rays',zigzag:'zigzag',spiral:'spiral ↻',spiralccw:'spiral ↺',toward:'toward',away:'away from'};
+const S=(o)=>Object.assign({mono:false,enabled:true,states:2,decay:'linear',decayP:.35,ghosts:false,density:.3,birthP:1,mortality:0,lifespan:0,spawn:0,stance:0,carnivore:false,
+  nb:{type:'moore',r:1,r2:0,mask:null},growth:{mode:'free',dir:1,spread:1,target:0,period:30}},o);
+const DEFAULT_SPECIES=[
+  S({name:"Brian's Brain", color:'#ff7a3d', states:3, birth:'2', survive:'none', density:.35}),                                                                    // Brian's Brain: pure chaos
+  S({name:'Star Wars', color:'#62d8ff', states:4, birth:'2', survive:'3-5', density:.25}),                                                                       // Star Wars
+  S({name:'Bugs',  color:'#7be07b', states:2, nb:{type:'circle',r:5,r2:0,mask:null}, birth:'25-33', survive:'25-42', density:.4}),                          // Larger than Life "Bugs" (rescaled to the disc); fragile on purpose
+  S({name:'Cross Climber',  color:'#f2eee6', mono:true, states:8, decay:'crowd', nb:{type:'cross',r:2,r2:0,mask:null}, birth:'1', survive:'1', density:.08, lifespan:120,
+     growth:{mode:'fixed',dir:1,spread:1,target:0,period:30}}),                                                                                            // grows upward like frost on glass, then ages out
+  S({name:'Shy Life',color:'#b48cff', states:2, birth:'3', survive:'2-3', density:.35, growth:{mode:'away',dir:1,spread:1,target:1,period:30}}),             // Conway's Life, but only grows away from Ember
+  S({name:'Drift Predator', carnivore:true, color:'#ff5c8a', states:6, decay:'stochastic', decayP:.3, birth:'3-4', survive:'2-4', density:.2, lifespan:60, mortality:.02,
+     growth:{mode:'drift',dir:1,spread:1,target:0,period:30}}),                                                                                            // predator that wanders
+  S({name:'Knight Climber', color:'#e0c36a', states:5, nb:{type:'knight',r:1,r2:0,mask:null}, birth:'2-3', survive:'2-4', density:.3, birthP:.8, mortality:.01,
+     growth:{mode:'toward',dir:1,spread:1,target:0,period:30}}),                                                                                           // knight-move sensing, climbs total density
+];
+const NS=DEFAULT_SPECIES.length;
+const I=n=>Array.from({length:n},(_,i)=>Array.from({length:n},(_,j)=>i===j?1:0));
+const DEFAULT_AFF=I(NS); DEFAULT_AFF[0][4]=-1; DEFAULT_AFF[2][4]=.5; DEFAULT_AFF[1][3]=.5; DEFAULT_AFF[3][1]=.5; DEFAULT_AFF[4][0]=-.5; DEFAULT_AFF[5][1]=.5; DEFAULT_AFF[5][2]=.5; DEFAULT_AFF[6][6]=1;
+const DEFAULT_PRED=Array.from({length:NS},()=>Array(NS).fill(0)); DEFAULT_PRED[5][1]=1; DEFAULT_PRED[5][2]=1; DEFAULT_PRED[0][2]=1;
+const DEFAULT_PREDK=[2,3,3,3,3,3,3];
+let cfg=null;
+function defaults(){return JSON.parse(JSON.stringify({species:DEFAULT_SPECIES,aff:DEFAULT_AFF,pred:DEFAULT_PRED,predK:DEFAULT_PREDK}));}
+const sim={size:160,pattern:'blobs',seed:1337,speed:20,playing:true,showDecay:true,brush:1,focus:0,wrap:true};
+
+// ───────────────────────── neighbourhood shapes ─────────────────────────
+function shapeOffsets(nb){
+  const out=[], r=clamp(nb.r|0,1,6), r2=clamp(nb.r2|0,0,r-1);
+  const push=(dx,dy)=>{ if(dx||dy) out.push([dx,dy]); };
+  switch(nb.type){
+    case 'custom': (nb.mask||[[0,-1],[1,0],[0,1],[-1,0]]).forEach(([dx,dy])=>push(dx,dy)); break;
+    case 'vn': for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++) if(Math.abs(dx)+Math.abs(dy)<=r) push(dx,dy); break;
+    case 'circle': for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++) if(dx*dx+dy*dy<=r*r+r*0.5) push(dx,dy); break;
+    case 'ring': for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){ const d=dx*dx+dy*dy; if(d<=r*r+r*0.5 && d>r2*r2+r2*0.5) push(dx,dy); } break;
+    case 'cross': for(let d=-r;d<=r;d++){ push(d,0); push(0,d); } break;
+    case 'x': for(let d=-r;d<=r;d++){ push(d,d); push(d,-d); } break;
+    case 'hline': for(let d=-r;d<=r;d++) push(d,0); break;
+    case 'vline': for(let d=-r;d<=r;d++) push(0,d); break;
+    case 'front': for(let dy=-r;dy<=0;dy++)for(let dx=-r;dx<=r;dx++) push(dx,dy); break;
+    case 'knight': [[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]].forEach(([a,b])=>push(a*r,b*r)); break;
+    case 'star': for(let d=-r;d<=r;d++){ push(d,0); push(0,d); push(d,d); push(d,-d); } break;
+    case 'hollow': for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++) if(Math.max(Math.abs(dx),Math.abs(dy))>r2) push(dx,dy); break;
+    case 'checker': for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++) if(((dx+dy)&1)===0) push(dx,dy); break;
+    case 'crescent': for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){ const d=dx*dx+dy*dy, e=dx*dx+(dy-Math.ceil(r/2))*(dy-Math.ceil(r/2)); if(d<=r*r+r*0.5 && e>r*r*0.55) push(dx,dy); } break;
+    case 'hook': { let x=0,y=0,dx=1,dy=0,len=1,step=0; const pts=[]; while(pts.length<r*r*2+2){ for(let i=0;i<len&&pts.length<r*r*2+2;i++){ x+=dx;y+=dy; if(Math.abs(x)<=r&&Math.abs(y)<=r) pts.push([x,y]); } [dx,dy]=[-dy,dx]; if(++step%2===0) len++; if(Math.max(Math.abs(x),Math.abs(y))>r) break; } pts.filter((_,i)=>i%2===0||r<3).forEach(([a,b])=>push(a,b)); break; }
+    case 'corners': for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++) if(Math.abs(dx)>r-Math.ceil(r/2)&&Math.abs(dy)>r-Math.ceil(r/2)) push(dx,dy); break;
+    default: for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++) push(dx,dy);
+  }
+  const seen=new Set(); return out.filter(([a,b])=>{ if(Math.abs(a)>RM||Math.abs(b)>RM) return false; const k=a+','+b; if(seen.has(k)) return false; seen.add(k); return true; });
+}
+
+function generateMask(kind,r,rng){
+  const out=[];
+  if(kind==='identicon'){ for(let dy=-r;dy<=r;dy++)for(let dx=0;dx<=r;dx++) if((dx||dy)&&rng()<0.45){ out.push([dx,dy]); if(dx) out.push([-dx,dy]); } }
+  else if(kind==='symmetric'){ for(let dy=0;dy<=r;dy++)for(let dx=dy;dx<=r;dx++) if((dx||dy)&&rng()<0.4){ const set=new Set(); [[dx,dy],[-dx,dy],[dx,-dy],[-dx,-dy],[dy,dx],[-dy,dx],[dy,-dx],[-dy,-dx]].forEach(([a,b])=>{ if(a||b) set.add(a+','+b); }); set.forEach(k=>out.push(k.split(',').map(Number))); } }
+  else { for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++) if((dx||dy)&&rng()<0.35) out.push([dx,dy]); }
+  if(!out.length) out.push([0,-1],[1,0]);
+  return out;
+}
+// names: defaults are named after their designs; everything generated gets an invented name
+const NA=['Vell','Mar','Quin','Sable','Oro','Nim','Tal','Ash','Brin','Cor','Dusk','Eld','Fen','Gal','Hex','Ivo','Juni','Kel','Lum','Myr','Nox','Opa','Pyr','Rud','Sil','Tor','Umb','Vex','Wyn','Zeph'];
+const NB=['ium','ock','ette','wick','ara','ith','oss','en','ule','ix','ora','ant','yr','ost','ell','une'];
+const EP=['Moth','Furnace','Tide','Lantern','Choir','Kiln','Comet','Lichen','Harrow','Gossamer','Coil','Prism','Marrow','Thistle','Whisper','Vane','Cinder','Shoal','Glass','Loom'];
+function inventName(rng,taken=new Set()){ for(let t=0;t<40;t++){ const a=NA[(rng()*NA.length)|0]+NB[(rng()*NB.length)|0]; const nm=rng()<0.5?a:a+' '+EP[(rng()*EP.length)|0]; if(!taken.has(nm)) return nm; } return 'Nameless '+((rng()*999)|0); }
+const PALETTE=['#ff7a3d','#62d8ff','#7be07b','#f2eee6','#b48cff','#ff5c8a','#e0c36a','#4fd1b5','#ff9ecf','#9ac1ff','#c8ff6a','#ffb86b','#a0f0e0','#d98cff'];
+
+// ───────────────────────── compiled rules ─────────────────────────
+const R={};
+function compileRules(){
+  const n=cfg.species.length, S1=n+1; R.S1=S1;
+  R.shapes=[]; R.shapeOf=new Uint8Array(S1); R.K=new Int16Array(S1);
+  R.birth=[null]; R.surv=[null]; R.states=new Uint8Array(S1); R.decay=new Uint8Array(S1); R.decayP=new Float32Array(S1);
+  R.ghosts=new Uint8Array(S1); R.enabled=new Uint8Array(S1); R.aff=new Float32Array(S1*S1); R.predOf=[[]];
+  R.birthP=new Float32Array(S1); R.mort=new Float32Array(S1); R.life=new Uint16Array(S1); R.spawn=new Float32Array(S1);
+  R.gmode=new Uint8Array(S1); R.gdir=new Uint8Array(S1); R.gspread=new Uint8Array(S1); R.gtarget=new Uint8Array(S1); R.gperiod=new Uint16Array(S1);
+  if(!R.curDir||R.curDir.length!==S1) R.curDir=new Uint8Array(S1).map((_,i)=>1+(i*3)%8);
+  R.rgb=[null]; R.scale=[null]; R.needDens=new Set();
+  const shapeKeys=new Map();
+  cfg.species.forEach((s,i)=>{
+    const q=i+1; s.states=clamp(Math.round(+s.states)||2,2,32);
+    const offs=shapeOffsets(s.nb), key=JSON.stringify(offs);
+    let g=shapeKeys.get(key); if(g===undefined){ g=R.shapes.length; shapeKeys.set(key,g); R.shapes.push({dx:Int8Array.from(offs.map(o=>o[0])),dy:Int8Array.from(offs.map(o=>o[1])),K:offs.length,cnt:new Int16Array(S1),tot:0}); }
+    R.shapeOf[q]=g; R.K[q]=offs.length;
+    R.birth[q]=parseSet(s.birth,offs.length); R.surv[q]=parseSet(s.survive,offs.length);
+    R.states[q]=s.states; R.decay[q]=DECAY_MODES[s.decay]??0; R.decayP[q]=+s.decayP; R.ghosts[q]=s.ghosts?1:0; R.enabled[q]=s.enabled?1:0;
+    R.birthP[q]=+s.birthP; R.mort[q]=+s.mortality; R.life[q]=+s.lifespan|0; R.spawn[q]=+s.spawn*1e-4;
+    const gr=s.growth; R.gmode[q]=GROWTH_MODES[gr.mode]??0; R.gdir[q]=clamp(gr.dir|0,1,8); R.gspread[q]=clamp(gr.spread|0,0,3); R.gtarget[q]=gr.target|0; R.gperiod[q]=Math.max(1,gr.period|0);
+    if(R.gmode[q]>=7){ R.needDens.add(gr.target===-1?q:(gr.target|0)); if(gr.target===-1) R.gtarget[q]=q; }
+    for(let j=0;j<n;j++) R.aff[q*S1+j+1]=+cfg.aff[i][j];
+    const pl=[]; for(let j=0;j<n;j++) if(cfg.pred[j][i]) pl.push(j+1,Math.max(1,+cfg.predK[j]||1)); R.predOf[q]=pl;
+    const base=hexRGB(s.color), ns=s.states, tbl=new Uint8Array(ns*3), sc=new Float32Array(ns);
+    for(let k=1;k<ns;k++){ const f=ns>2?(k-1)/(ns-2):0; for(let c=0;c<3;c++){ tbl[k*3+c]=s.mono?Math.round(base[c]*(1-0.9*f)):Math.round(base[c]*(1-0.78*f)+[10,12,20][c]*f); } sc[k]=1-f; }
+    R.rgb[q]=tbl; R.scale[q]=sc;
+  });
+}
+
+// ───────────────────────── world ─────────────────────────
+const W={};
+function initWorld(){
+  const n=sim.size, N=n*n; W.n=n; W.N=N; W.step=0;
+  W.sp=new Uint8Array(N); W.st=new Uint8Array(N); W.dir=new Uint8Array(N); W.age=new Uint16Array(N);
+  W.sp2=new Uint8Array(N); W.st2=new Uint8Array(N); W.dir2=new Uint8Array(N); W.age2=new Uint16Array(N);
+  W.XW=new Int16Array(n+2*RM); for(let i=0;i<n+2*RM;i++){ const v=i-RM; W.XW[i]=sim.wrap?((v%n)+n)%n:(v<0||v>=n?-1:v); }
+  W.COS=new Float64Array(n); W.SIN=new Float64Array(n); for(let i=0;i<n;i++){ W.COS[i]=Math.cos(2*Math.PI*i/n); W.SIN[i]=Math.sin(2*Math.PI*i/n); }
+  W.dens=[]; W.tmpF=new Float32Array(N); W.tmpG=new Float32Array(N);
+  W.rng=mulberry32(sim.seed);
+  seed(); resetAnalysis(); setupCanvas();
+  log(0,`Seeded a ${n}×${n} ${sim.wrap?'wrapped':'walled'} world (${fmt(N)} cells), layout <em>${$('#pattern').selectedOptions[0].text.toLowerCase()}</em>, seed ${sim.seed}.`);
+  record(measure()); dirty=true;
+}
+function seed(){
+  const n=W.n, sp=W.sp, st=W.st, rng=W.rng; sp.fill(0); st.fill(0); W.dir.fill(0); W.age.fill(0);
+  const put=(x,y,q)=>{ if(!sim.wrap&&(x<0||y<0||x>=n||y>=n)) return; const i=(((y%n)+n)%n)*n+(((x%n)+n)%n); sp[i]=q; st[i]=1; };
+  const act=cfg.species.map((s,i)=>s.enabled?i:-1).filter(i=>i>=0); if(!act.length||sim.pattern==='empty') return;
+  const tot=act.reduce((a,i)=>a+cfg.species[i].density,0);
+  const pickQ=()=>{ let r=rng()*tot; for(const q of act){ r-=cfg.species[q].density; if(r<=0) return q+1; } return act[act.length-1]+1; };
+  if(sim.pattern==='random'){ for(let i=0;i<n*n;i++) if(rng()<0.3){ sp[i]=pickQ(); st[i]=1; } }
+  else if(sim.pattern==='blobs'){
+    for(const q of act){ const s=cfg.species[q], blobs=2+((rng()*3)|0);
+      for(let b=0;b<blobs;b++){ const cx=rng()*n, cy=rng()*n, rad=n*(0.05+rng()*0.06), r2=rad*rad, R_=Math.ceil(rad);
+        for(let dy=-R_;dy<=R_;dy++)for(let dx=-R_;dx<=R_;dx++) if(dx*dx+dy*dy<=r2&&rng()<s.density) put((cx+dx)|0,(cy+dy)|0,q+1); } }
+  } else if(sim.pattern==='layers'){ const h=n/act.length; for(let y=0;y<n;y++){ const q=act[Math.min(act.length-1,(y/h)|0)]; for(let x=0;x<n;x++) if(rng()<cfg.species[q].density*0.7) put(x,y,q+1); } }
+  else if(sim.pattern==='ring'){ const m=act.length, rad=n*(m>1?0.3:0), br=Math.min(n*0.14,n*1.2/m); act.forEach((q,k)=>{ const a=2*Math.PI*k/m-Math.PI/2, cx=n/2+rad*Math.cos(a), cy=n/2+rad*Math.sin(a), R_=Math.ceil(br); for(let dy=-R_;dy<=R_;dy++)for(let dx=-R_;dx<=R_;dx++) if(dx*dx+dy*dy<=br*br&&rng()<cfg.species[q].density) put((cx+dx)|0,(cy+dy)|0,q+1); }); }
+  else { const c=n/2, r=n*0.22; for(let y=0;y<n;y++)for(let x=0;x<n;x++) if(Math.abs(x-c)<=r&&Math.abs(y-c)<=r&&rng()<0.4) put(x,y,pickQ()); }
+}
+// density fields (7×7 box), wrapped
+function computeDensity(target){
+  const n=W.n, N=W.N, sp=W.sp, st=W.st, F=W.tmpF, G=W.tmpG, XW=W.XW;
+  for(let i=0;i<N;i++){ const s=sp[i]; F[i]=(s&&st[i]===1&&(target===0||s===target))?1:0; }
+  for(let y=0;y<n;y++){ const row=y*n; for(let x=0;x<n;x++){ let a=0; for(let d=-DR;d<=DR;d++){ const xx=XW[x+d+RM]; if(xx>=0) a+=F[row+xx]; } G[row+x]=a; } }
+  const D=W.dens[target]||(W.dens[target]=new Float32Array(N));
+  for(let y=0;y<n;y++)for(let x=0;x<n;x++){ let a=0; for(let d=-DR;d<=DR;d++){ const yy=XW[y+d+RM]; if(yy>=0) a+=G[yy*n+x]; } D[y*n+x]=a; }
+}
+
+// ───────────────────────── one generation ─────────────────────────
+function step(){
+  const S1=R.S1, n=W.n, N=W.N, sp=W.sp, st=W.st, dir=W.dir, age=W.age, sp2=W.sp2, st2=W.st2, dir2=W.dir2, age2=W.age2, XW=W.XW, aff=R.aff, rnd=W.rng, shapes=R.shapes, G=shapes.length;
+  const pop=R.popTmp||(R.popTmp=new Int32Array(S1)), tot=R.totTmp||(R.totTmp=new Int32Array(S1)), cs=R.cs||(R.cs=new Float64Array(S1*4)), pairs=R.pairs||(R.pairs=new Uint8Array(S1*S1));
+  if(pop.length!==S1){ R.popTmp=new Int32Array(S1); R.totTmp=new Int32Array(S1); R.cs=new Float64Array(S1*4); R.pairs=new Uint8Array(S1*S1); return step(); }
+  pop.fill(0); tot.fill(0); cs.fill(0);
+  for(const t of R.needDens) computeDensity(t);
+  // wandering directions
+  for(let q=1;q<S1;q++) if(R.gmode[q]===2 && W.step%R.gperiod[q]===0){ const r=rnd(); if(r<0.4) R.curDir[q]=1+(R.curDir[q]%8); else if(r<0.8) R.curDir[q]=1+((R.curDir[q]+6)%8); }
+  let changed=0, contact=0, predEv=0, h=2166136261;
+  const growthDir=(q,x,y,i)=>{
+    const mode=R.gmode[q]; if(mode===0) return 9;
+    const D=mode>=7?W.dens[R.gtarget[q]]:null, start=(rnd()*8)|0;
+    for(let a=0;a<8;a++){ const k=1+((start+a)&7), py=XW[y-DY[k]+RM], pxx=XW[x-DX[k]+RM]; if(py<0||pxx<0) continue; const p=py*n+pxx;
+      if(sp[p]!==q||st[p]!==1) continue;
+      let ok=false; const pd=dir[p];
+      switch(mode){
+        case 1: { let d=Math.abs(k-R.gdir[q]); d=Math.min(d,8-d); ok=d<=R.gspread[q]; break; }
+        case 2: { let d=Math.abs(k-R.curDir[q]); d=Math.min(d,8-d); ok=d<=R.gspread[q]; break; }
+        case 3: { if(!pd) ok=true; else { let d=Math.abs(k-pd); d=Math.min(d,8-d); ok=d<=R.gspread[q]-1; } break; }
+        case 4: ok=!pd||pd!==k; break;
+        case 5: ok=!pd||k===1+(pd%8); break;
+        case 6: ok=!pd||k===1+((pd+6)%8); break;
+        case 7: ok=D[i]>=D[p]; break;
+        case 8: ok=D[i]<=D[p]; break;
+      }
+      if(ok) return k;
+    }
+    return 0;
+  };
+  for(let y=0;y<n;y++){ const row=y*n;
+    for(let x=0;x<n;x++){ const i=row+x;
+      const s=sp[i], k0=st[i], own=s?R.shapeOf[s]:-1;
+      for(let g=0;g<G;g++){ if(s&&g!==own) continue; const sh=shapes[g], c=sh.cnt; c.fill(0); let t=0; const dx=sh.dx, dy=sh.dy, K=sh.K;
+        for(let k=0;k<K;k++){ const yy=XW[y+dy[k]+RM]; if(yy<0) continue; const xx=XW[x+dx[k]+RM]; if(xx<0) continue; const j=yy*n+xx, s=sp[j]; if(s===0) continue; const q=st[j]; if(q===1||(R.ghosts[s]&&q>1)){ c[s]++; t++; } }
+        sh.tot=t; }
+      let ns=s, nk=k0, nd=dir[i], na=age[i];
+      if(s===0){
+        let best=0, bestScore=-1, bestDir=0;
+        for(let q=1;q<S1;q++){
+          if(!R.enabled[q]) continue;
+          const c=shapes[R.shapeOf[q]].cnt, r0=q*S1; let e=0; for(let r=1;r<S1;r++) e+=c[r]*aff[r0+r];
+          e=Math.round(e); if(e<0||e>R.K[q]||!R.birth[q][e]) continue;
+          if(R.birthP[q]<1&&rnd()>R.birthP[q]) continue;
+          const d=growthDir(q,x,y,i); if(!d) continue;
+          const sc=c[q]*1000+rnd()*999; if(sc>bestScore){ bestScore=sc; best=q; bestDir=d; }
+        }
+        if(!best){ for(let q=1;q<S1;q++) if(R.enabled[q]&&R.spawn[q]>0&&rnd()<R.spawn[q]){ best=q; bestDir=9; break; } }
+        if(best){ ns=best; nk=1; nd=bestDir===9?0:bestDir; na=0; }
+      } else if(k0===1){
+        const c=shapes[R.shapeOf[s]].cnt, r0=s*S1; let e=0; for(let r=1;r<S1;r++) e+=c[r]*aff[r0+r]; e=Math.round(e);
+        let alive=R.enabled[s]&&e>=0&&e<=R.K[s]&&R.surv[s][e]===1;
+        if(alive&&R.mort[s]>0&&rnd()<R.mort[s]) alive=false;
+        if(alive&&R.life[s]>0&&na>=R.life[s]) alive=false;
+        if(alive){ const pl=R.predOf[s]; for(let p=0;p<pl.length;p+=2) if(c[pl[p]]>=pl[p+1]){ alive=false; predEv++; break; } }
+        let touched=false; for(let q=1;q<S1;q++) if(q!==s&&c[q]>0){ touched=true; pairs[s*S1+q]=1; }
+        if(touched) contact++;
+        if(alive) na=Math.min(65000,na+1); else if(R.states[s]>2) nk=2; else { ns=0; nk=0; nd=0; na=0; }
+      } else {
+        const mode=R.decay[s]; let adv=1; const sh=shapes[R.shapeOf[s]];
+        if(mode===1) adv=rnd()<R.decayP[s]?1:0;
+        else if(mode===2) adv=1+((3*sh.tot/Math.max(1,sh.K))|0);
+        else if(mode===3){ const c=sh.cnt, r0=s*S1; let e=0; for(let r=1;r<S1;r++) e+=c[r]*aff[r0+r]; e=Math.round(e); if(R.enabled[s]&&e>=0&&e<=R.K[s]&&R.birth[s][e]) adv=-1; }
+        if(adv===-1){ nk=1; na=0; } else { nk=k0+adv; if(nk>=R.states[s]){ ns=0; nk=0; nd=0; na=0; } }
+      }
+      sp2[i]=ns; st2[i]=nk; dir2[i]=nd; age2[i]=na;
+      if(ns!==s||nk!==k0) changed++;
+      if(ns){ tot[ns]++; if(nk===1){ pop[ns]++; const o=ns*4; cs[o]+=W.COS[x]; cs[o+1]+=W.SIN[x]; cs[o+2]+=W.COS[y]; cs[o+3]+=W.SIN[y]; } }
+      h=Math.imul(h^(ns*31+nk),16777619);
+    } }
+  W.sp=sp2; W.st=st2; W.dir=dir2; W.age=age2; W.sp2=sp; W.st2=st; W.dir2=dir; W.age2=age; W.step++;
+  return measure(changed,contact,predEv,h>>>0);
+}
+function measure(changed=0,contact=0,predEv=0,hash=0){
+  const S1=R.S1, n=W.n;
+  if(!R.popTmp||R.popTmp.length!==S1){ R.popTmp=new Int32Array(S1); R.totTmp=new Int32Array(S1); R.cs=new Float64Array(S1*4); R.pairs=new Uint8Array(S1*S1); }
+  const pop=R.popTmp, tot=R.totTmp, cs=R.cs;
+  if(W.step===0){ pop.fill(0); tot.fill(0); cs.fill(0); for(let i=0;i<W.N;i++){ const s=W.sp[i]; if(s){ tot[s]++; if(W.st[i]===1){ pop[s]++; const x=i%n,y=(i/n)|0,o=s*4; cs[o]+=W.COS[x]; cs[o+1]+=W.SIN[x]; cs[o+2]+=W.COS[y]; cs[o+3]+=W.SIN[y]; } } } }
+  const m={step:W.step,pop:Array.from(pop),tot:Array.from(tot),changed,contact,predEv,hash,cen:[]};
+  let living=0; for(let q=1;q<S1;q++) living+=pop[q];
+  m.living=living; m.occupied=m.tot.reduce((a,b)=>a+b,0);
+  for(let q=1;q<S1;q++){ const o=q*4; m.cen[q]=pop[q]?[0,2].map(a=>{ let t=Math.atan2(cs[o+a+1],cs[o+a]); if(t<0) t+=2*Math.PI; return t/(2*Math.PI)*n; }):null; }
+  let H=0; for(let q=1;q<S1;q++) if(pop[q]){ const p=pop[q]/living; H-=p*Math.log2(p); }
+  m.diversity=H; m.activity=changed/W.N; return m;
+}
+
+// ───────────────────────── analysis / field log ─────────────────────────
+const A={}, hist={}, MAXH=600;
+function resetAnalysis(){
+  A.run=0; A.longest=0; A.period=null; A.hashes=new Map(); A.hashQ=[]; A.peak=[]; A.peakStep=[]; A.wasAlive=[]; A.dominant=null; A.cool={}; A.dead=false; A.pairs=new Uint8Array(R.S1*R.S1); if(R.pairs) R.pairs.fill(0); A.last=null;
+  hist.pop=[]; hist.act=[]; hist.contact=[]; hist.interest=[]; hist.cen=[];
+  for(let q=0;q<R.S1;q++){ hist.pop[q]=[]; hist.cen[q]=[]; A.peak[q]=0; A.peakStep[q]=0; A.wasAlive[q]=false; }
+  $('#log').innerHTML='<div id="empty">Nothing yet.</div>';
+}
+function push(arr,v){ arr.push(v); if(arr.length>MAXH) arr.shift(); }
+function cool(key,steps){ const t=W.step; if((A.cool[key]??-1e9)+steps>t) return false; A.cool[key]=t; return true; }
+function sname(q){ const s=cfg.species[q-1]; return `<b style="color:${s.color}">${s.name}</b>`; }
+function log(step,html,rare=false){ const el=$('#log'), e=$('#empty'); if(e) e.remove(); const d=document.createElement('div'); d.className='e'+(rare?' rare':''); d.innerHTML=`<span class="t">${step}</span><span>${html}</span>`; el.prepend(d); while(el.children.length>160) el.lastChild.remove(); }
+function record(m){
+  const S1=R.S1, N=W.N, t=m.step;
+  for(let q=1;q<S1;q++){ push(hist.pop[q],m.pop[q]); push(hist.cen[q],m.cen[q]); }
+  push(hist.act,m.activity); push(hist.contact,m.living?m.contact/m.living:0);
+  if(t===0){ for(let q=1;q<S1;q++){ A.wasAlive[q]=m.tot[q]>0; A.peak[q]=m.pop[q]; } push(hist.interest,0); A.last=m; return; }
+  const prev=A.hashes.get(m.hash); let period=null; if(prev!==undefined&&prev<t) period=t-prev;
+  A.hashes.set(m.hash,t); A.hashQ.push(m.hash); if(A.hashQ.length>400){ const old=A.hashQ.shift(); if(A.hashes.get(old)<=t-400) A.hashes.delete(old); }
+  if(period!==null&&period!==A.period){
+    if(m.occupied===0){ if(!A.dead){ A.dead=true; log(t,'The world is empty. Everything has cleared.',true); } }
+    else if(period===1) log(t,`Frozen: the whole world is a still life (${fmt(m.occupied)} cells).`,true);
+    else log(t,`Settled into a period-${period} oscillation with ${fmt(m.living)} living cells.`,true);
+  }
+  A.period=period;
+  const win=25, sh=hist.pop[1].length, denom=Math.max(1,m.living);
+  for(let q=1;q<S1;q++){
+    const p=m.pop[q]; if(p>A.peak[q]){ A.peak[q]=p; A.peakStep[q]=t; }
+    if(A.wasAlive[q]&&m.tot[q]===0){ A.wasAlive[q]=false; log(t,`${sname(q)} went extinct. Peak ${fmt(A.peak[q])} living cells at step ${A.peakStep[q]}.`,true); }
+    else if(!A.wasAlive[q]&&m.tot[q]>0){ A.wasAlive[q]=true; if(t>1) log(t,`${sname(q)} appeared.`); }
+    if(sh>win){ const old=hist.pop[q][sh-1-win];
+      if(old>N*0.002&&p>=old*2.2&&cool('boom'+q,80)) log(t,`${sname(q)} is booming: ${fmt(old)} → ${fmt(p)} in ${win} steps.`);
+      if(old>N*0.005&&p<=old*0.4&&p>0&&cool('crash'+q,80)) log(t,`${sname(q)} collapsed: ${fmt(old)} → ${fmt(p)} in ${win} steps.`); }
+    const ch=hist.cen[q], L=ch.length;
+    if(L>14&&p>=6&&p<=N*0.03&&ch[L-1]&&ch[L-13]){ const o=hist.pop[q][sh-13];
+      if(o>0&&Math.abs(p-o)/o<0.3){ let d=0; for(let a=0;a<2;a++){ let dx=Math.abs(ch[L-1][a]-ch[L-13][a]); dx=Math.min(dx,W.n-dx); d+=dx*dx; }
+        if(Math.sqrt(d)>4&&cool('glide'+q,90)) log(t,`${sname(q)} has a translating structure: centroid moved ${Math.sqrt(d).toFixed(1)} cells in 12 steps at a stable ~${fmt(p)} cells.`,true); } }
+    if(m.living>N*0.01&&p/denom>0.7&&A.dominant!==q){ A.dominant=q; log(t,`${sname(q)} now holds ${pct(p,denom)} of all living cells.`); }
+  }
+  if(A.dominant&&m.pop[A.dominant]/denom<0.5) A.dominant=null;
+  if(m.predEv>N*0.004&&cool('feed',60)) log(t,`Feeding surge: ${fmt(m.predEv)} cells consumed in one step.`);
+  for(let a=1;a<S1;a++)for(let b=a+1;b<S1;b++) if(!A.pairs[a*S1+b]&&(R.pairs[a*S1+b]||R.pairs[b*S1+a])){ A.pairs[a*S1+b]=1; if(t>1) log(t,`First contact between ${sname(a)} and ${sname(b)}.`); }
+  if(m.occupied===0&&!A.dead){ A.dead=true; log(t,'The world is empty. Everything has cleared.',true); }
+  const inBand=m.activity>=0.0015&&m.activity<=0.28&&!A.period&&m.occupied>0, nAlive=m.pop.filter(v=>v>0).length;
+  let interest=0; if(inBand){ const c=m.living?m.contact/m.living:0; interest=(0.5+0.5*Math.min(1,c/0.3))*(0.6+0.4*Math.min(1,m.diversity/Math.log2(Math.max(2,nAlive)))); }
+  push(hist.interest,interest);
+  if(interest>0){ A.run++; if(A.run>A.longest) A.longest=A.run; }
+  else if(A.run>0){ if(A.run>=30) log(t,`Interesting phase ended after ${A.run} steps${A.period?` (cycle of ${A.period})`:m.occupied===0?' (extinction)':' (activity left the band)'}.`); A.run=0; }
+  if(t%500===0) log(t,`Checkpoint: ${fmt(m.living)} living, activity ${pct(m.changed,N)}, ${nAlive} species present, longest interesting run ${A.longest}.`);
+  A.last=m;
+}
+
+// ───────────────────────── rendering ─────────────────────────
+const cv=$('#world'), ctx=cv.getContext('2d',{alpha:false});
+let img=null, px=null;
+const BG=[10,12,20];
+function setupCanvas(){ cv.width=W.n; cv.height=W.n; img=ctx.createImageData(W.n,W.n); px=img.data; fitCanvas(); }
+function fitCanvas(){ const lp=$('#controls').classList.contains('hidden')?0:350, rp=$('#observatory').classList.contains('hidden')?0:360; let avail=Math.min(innerWidth-lp-rp-40,innerHeight-60); if(avail<300) avail=Math.min(innerWidth,innerHeight)-24; const s=Math.max(120,Math.floor(avail)); cv.style.width=cv.style.height=s+'px'; cv.style.marginLeft=(lp-rp)+'px'; }
+function render(){
+  const N=W.N, sp=W.sp, st=W.st, focus=sim.focus, show=sim.showDecay;
+  for(let i=0,o=0;i<N;i++,o+=4){ const s=sp[i]; let r=BG[0],g=BG[1],b=BG[2];
+    if(s){ const k=st[i]; if(k===1||show){ const t=R.rgb[s]; r=t[k*3]; g=t[k*3+1]; b=t[k*3+2]; if(focus&&s!==focus){ r=(r*0.25+BG[0]*0.75)|0; g=(g*0.25+BG[1]*0.75)|0; b=(b*0.25+BG[2]*0.75)|0; } } }
+    px[o]=r; px[o+1]=g; px[o+2]=b; px[o+3]=255; }
+  ctx.putImageData(img,0,0);
+}
+// hover + paint
+const tip=$('#tip'); let painting=false;
+function cellAt(e){ const r=cv.getBoundingClientRect(); const x=((e.clientX-r.left)/r.width*W.n)|0, y=((e.clientY-r.top)/r.height*W.n)|0; if(x<0||y<0||x>=W.n||y>=W.n) return null; return {x,y,i:y*W.n+x}; }
+cv.addEventListener('pointermove',e=>{ const c=cellAt(e); if(!c){ tip.style.display='none'; return; }
+  if(painting) paint(c);
+  const s=W.sp[c.i]; let txt=`(${c.x}, ${c.y}) empty`;
+  if(s){ const sp_=cfg.species[s-1]; txt=`(${c.x}, ${c.y}) <b style="color:${sp_.color}">${sp_.name}</b> · state ${W.st[c.i]}/${sp_.states-1}${W.st[c.i]===1?' living':' decaying'} · age ${W.age[c.i]}${W.dir[c.i]?' · born '+DNAME[W.dir[c.i]]:''}`; }
+  tip.innerHTML=txt; tip.style.display='block'; tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px'; });
+cv.addEventListener('pointerleave',()=>tip.style.display='none');
+cv.addEventListener('pointerdown',e=>{ painting=true; cv.setPointerCapture(e.pointerId); const c=cellAt(e); if(c) paint(c); });
+cv.addEventListener('pointerup',()=>painting=false);
+function paint(c){ const q=sim.brush, n=W.n; for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){ const yy=W.XW[c.y+dy+RM], xx=W.XW[c.x+dx+RM]; if(yy<0||xx<0) continue; const i=yy*n+xx; if(q){ W.sp[i]=q; W.st[i]=1; W.dir[i]=0; W.age[i]=0; } else { W.sp[i]=0; W.st[i]=0; } } dirty=true; }
+
+// ───────────────────────── main loop ─────────────────────────
+let acc=0, last=performance.now(), stepsThisSec=0, secT=0, rate=0, dirty=true;
+function loop(now){
+  requestAnimationFrame(loop);
+  const dt=Math.min(0.1,(now-last)/1000); last=now;
+  if(sim.playing){ acc+=dt*sim.speed; let budget=Math.min(Math.floor(acc),4); acc-=budget; const t0=performance.now();
+    while(budget-->0){ record(step()); stepsThisSec++; dirty=true; if(performance.now()-t0>40){ acc=0; break; } } }
+  secT+=dt; if(secT>=1){ rate=stepsThisSec/secT; stepsThisSec=0; secT=0; }
+  if(dirty){ render(); updateObservatory(); dirty=false; }
+}
+
+// ───────────────────────── observatory ─────────────────────────
+function updateObservatory(){
+  const m=A.last; if(!m) return;
+  $('#sStep').textContent=fmt(m.step); $('#sRate').textContent=sim.playing?rate.toFixed(1)+' steps/s':'paused';
+  $('#sAlive').textContent=`${fmt(m.living)} living${m.occupied>m.living?` +${fmt(m.occupied-m.living)} decaying`:''}`;
+  $('#sAct').textContent=pct(m.changed,W.N); $('#sContact').textContent=pct(m.contact,Math.max(1,m.living));
+  $('#sDiv').textContent=m.diversity.toFixed(2)+' bits'; $('#sRun').textContent=A.run; $('#sLongest').textContent=A.longest;
+  $('#sState').textContent=m.occupied===0?'empty':A.period===1?'still life':A.period?`cycle, period ${A.period}`:m.activity>0.28?'chaotic':m.activity<0.0015?'nearly quiescent':'active';
+  $$('.sp .pop').forEach((el,i)=>{ el.textContent=fmt(m.pop[i+1]); });
+  drawChart($('#cPop'),cfg.species.map((s,i)=>({data:hist.pop[i+1],color:s.color})),{});
+  drawChart($('#cAct'),[{data:hist.act,color:'#e7e2d7'},{data:hist.contact,color:'#ffb86b'}],{max:1,log:true});
+  drawChart($('#cInt'),[{data:hist.interest,color:'#9fd59f',fill:true}],{max:1});
+  if(inspecting){ const q=inspecting; const s=cfg.species[q-1]; $('#iLive').innerHTML=`${fmt(m.pop[q])} living, ${fmt(m.tot[q]-m.pop[q])} decaying — ${pct(m.pop[q],Math.max(1,m.living))} of all life · neighbourhood of ${R.K[q]} cells`; drawChart($('#iSpark'),[{data:hist.pop[q],color:s.color,fill:true}],{}); }
+}
+function drawChart(cv,series,opt){
+  const dpr=Math.min(devicePixelRatio,2), w=cv.clientWidth, h=cv.clientHeight; if(!w) return;
+  if(cv.width!==w*dpr){ cv.width=w*dpr; cv.height=h*dpr; }
+  const g=cv.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,w,h);
+  let max=opt.max||0; if(!opt.max) series.forEach(s=>s.data.forEach(v=>{ if(v>max) max=v; })); if(!max) max=1;
+  const L=Math.max(2,...series.map(s=>s.data.length)), x0=8, x1=w-6, y0=6, y1=h-6;
+  const Y=v=>{ let f=v/max; if(opt.log) f=v<=0?0:(Math.log10(Math.max(v,1e-4))+4)/4; return y1-(y1-y0)*clamp(f,0,1); };
+  g.strokeStyle='rgba(231,226,215,.08)'; g.lineWidth=1; g.beginPath(); g.moveTo(x0,y1+.5); g.lineTo(x1,y1+.5); g.stroke();
+  series.forEach(s=>{ const d=s.data; if(d.length<2) return; g.strokeStyle=s.color; g.lineWidth=1.4; g.lineJoin='round'; g.beginPath();
+    for(let i=0;i<d.length;i++){ const x=x0+(x1-x0)*(L-d.length+i)/(L-1), y=Y(d[i]); i?g.lineTo(x,y):g.moveTo(x,y); }
+    g.stroke(); if(s.fill){ g.lineTo(x1,y1); g.lineTo(x0+(x1-x0)*(L-d.length)/(L-1),y1); g.closePath(); g.fillStyle=s.color+'33'; g.fill(); } });
+}
+
+// ───────────────────────── overview UI ─────────────────────────
+function ruleSummary(s){ const nb=s.nb, shp=$('#iShape').querySelector(`option[value="${nb.type}"]`)?.textContent.split(' (')[0]||nb.type; const g=s.growth; let gs=GROWTH_SHORT[g.mode]||g.mode; if(g.mode==='fixed') gs+=' '+DNAME[g.dir]; if(g.mode==='toward'||g.mode==='away') gs+=' '+(g.target===0?'everything':g.target===-1?'itself':(cfg.species[g.target-1]?.name||'?')); return `B${s.birth}/S${s.survive} · ${s.states} states<br>${shp}${nb.type!=='knight'&&nb.type!=='custom'?' r'+nb.r:''} · ${gs}`; }
+function buildOverview(){
+  const wrap=$('#species'); wrap.innerHTML='';
+  cfg.species.forEach((s,i)=>{ const d=document.createElement('div'); d.className='sp';
+    d.innerHTML=`<span class="sw" style="background:${s.color};color:${s.color};opacity:${s.enabled?1:.3}"></span><span class="name" style="color:${s.color}">${s.name}</span><span class="rule">${ruleSummary(s)}</span><span class="pop">0</span><button class="mini" title="Save this agent to the library">Save</button>`;
+    d.onclick=()=>openInspector(i+1);
+    const sb=d.querySelector('button'); sb.onclick=e=>{ e.stopPropagation(); saveAgent(cfg.species[i],cfg.species[i].name); sb.textContent='Saved ✓'; setTimeout(()=>sb.textContent='Save',1500); };
+    wrap.appendChild(d); });
+  buildMatrices(); buildLegend(); buildLibrary();
+  const b=$('#brush'); b.innerHTML=`<option value="0">eraser</option>`+cfg.species.map((s,i)=>`<option value="${i+1}" ${sim.brush===i+1?'selected':''}>${s.name}</option>`).join('');
+}
+function buildMatrices(){
+  const hdr=`<tr><th></th>${cfg.species.map(s=>`<th style="color:${s.color}">${s.name.slice(0,4)}</th>`).join('')}</tr>`;
+  $('#affinity').innerHTML=`<table class="mx">${hdr}${cfg.species.map((s,i)=>`<tr><th class="r" style="color:${s.color}">${s.name}</th>${cfg.species.map((t,j)=>`<td class="${i===j?'d':''}"><input type="number" step="0.5" min="-2" max="2" value="${cfg.aff[i][j]}" data-i="${i}" data-j="${j}"></td>`).join('')}</tr>`).join('')}</table>`;
+  $$('#affinity input').forEach(inp=>inp.onchange=()=>{ cfg.aff[+inp.dataset.i][+inp.dataset.j]=+inp.value; compileRules(); });
+  $('#predation').innerHTML=`<table class="mx">${hdr.replace('</tr>','<th>k</th></tr>')}${cfg.species.map((s,i)=>`<tr><th class="r" style="color:${s.color}">${s.name}</th>${cfg.species.map((t,j)=>`<td>${i===j?'':`<input type="checkbox" ${cfg.pred[i][j]?'checked':''} data-i="${i}" data-j="${j}">`}</td>`).join('')}<td><input type="number" min="1" max="99" value="${cfg.predK[i]}" data-k="${i}"></td></tr>`).join('')}</table>`;
+  $$('#predation input[type=checkbox]').forEach(inp=>inp.onchange=()=>{ cfg.pred[+inp.dataset.i][+inp.dataset.j]=inp.checked?1:0; compileRules(); });
+  $$('#predation input[type=number]').forEach(inp=>inp.onchange=()=>{ cfg.predK[+inp.dataset.k]=+inp.value; compileRules(); });
+}
+function buildLegend(){ $('#legend').innerHTML=cfg.species.map(s=>`<span><i style="background:${s.color}"></i>${s.name}</span>`).join(''); }
+
+// ───────────────────────── inspector ─────────────────────────
+let inspecting=0;
+const nbc=$('#iNb'), nbg=nbc.getContext('2d'), NBG=13; // 13×13 preview grid
+function openInspector(q){ inspecting=q; sim.brush=q; $('#brush').value=q; $('#overview').style.display='none'; $('#inspector').style.display='block'; fillInspector(); $('#controls').scrollTop=0; }
+function closeInspector(){ inspecting=0; if(sim.focus){ sim.focus=0; dirty=true; } $('#inspector').style.display='none'; $('#overview').style.display='block'; buildOverview(); }
+$('#iBack').onclick=closeInspector;
+function fillInspector(){
+  const q=inspecting, s=cfg.species[q-1];
+  $('#iColor').value=s.color; $('#iName').value=s.name; $('#iEnabled').checked=s.enabled; $('#iFocus').classList.toggle('on',sim.focus===q);
+  $('#iShape').value=s.nb.type; $('#iR').value=s.nb.r; $('#iR2').value=s.nb.r2; $('#iRv').textContent=s.nb.r; $('#iR2v').textContent=s.nb.r2;
+  $('#iBirth').value=s.birth; $('#iSurvive').value=s.survive; $('#iBirthP').value=s.birthP; $('#iBirthPv').textContent=Math.round(s.birthP*100)+'%';
+  $('#iMort').value=s.mortality; $('#iMortv').textContent=(s.mortality*100).toFixed(1)+'%'; $('#iLife').value=s.lifespan; $('#iSpawn').value=s.spawn; $('#iSpawnv').textContent=s.spawn?(s.spawn*1e-4).toExponential(1)+'/cell':'off';
+  $('#iNStates').value=s.states; $('#iDecay').innerHTML=Object.keys(DECAY_MODES).map(k=>`<option value="${k}" ${s.decay===k?'selected':''}>${DECAY_LABEL[k]}</option>`).join(''); $('#iDecayP').value=s.decayP; $('#iDecayPv').textContent=Math.round(s.decayP*100)+'%';
+  $('#iGhosts').checked=s.ghosts; $('#iMono').checked=s.mono; $('#iDens').value=s.density; $('#iDensv').textContent=Math.round(s.density*100)+'%';
+  $('#iGrowth').value=s.growth.mode; $('#iTarget').innerHTML=`<option value="0">everything</option><option value="-1">itself</option>`+cfg.species.map((t,i)=>i+1===q?'':`<option value="${i+1}">${t.name}</option>`).join(''); $('#iTarget').value=s.growth.target;
+  $('#iStance').value=s.stance; $('#iCarn').checked=!!s.carnivore;
+  $('#iSpread').value=s.growth.spread; $('#iSpreadv').textContent='±'+(s.growth.spread*45)+'°'; $('#iPeriod').value=s.growth.period;
+  const c=$('#iCompass'); c.innerHTML=''; [8,1,2,7,0,3,6,5,4].forEach(d=>{ const b=document.createElement('button'); if(d===0){ b.className='c'; b.textContent='◎'; } else { b.textContent=DNAME[d]; b.classList.toggle('on',s.growth.dir===d); b.onclick=()=>{ s.growth.dir=d; if(s.growth.mode!=='fixed'){ s.growth.mode='fixed'; $('#iGrowth').value='fixed'; } compileRules(); fillInspector(); }; } c.appendChild(b); });
+  drawStates(); drawNb(); drawRelations(); $('#iK').textContent=`— ${R.K[q]} cells`;
+  const gm=s.growth.mode; $('#iTarget').parentElement.style.opacity=(gm==='toward'||gm==='away')?1:.35; $('#iPeriod').parentElement.style.opacity=gm==='drift'?1:.35; $('#iSpread').parentElement.style.opacity=(gm==='fixed'||gm==='drift'||gm==='straight')?1:.35; c.style.opacity=gm==='fixed'?1:.35;
+  $('#iR2').parentElement.style.opacity=(s.nb.type==='ring'||s.nb.type==='hollow')?1:.35; $('#iR').parentElement.style.opacity=(s.nb.type==='custom')?.35:1; $('#iDecayP').parentElement.style.opacity=s.decay==='stochastic'?1:.35;
+  updateObservatory();
+}
+function drawStates(){ const s=cfg.species[inspecting-1], t=R.rgb[inspecting], w=$('#iStates'); w.innerHTML=''; for(let k=1;k<s.states;k++){ const i=document.createElement('i'); i.style.background=`rgb(${t[k*3]},${t[k*3+1]},${t[k*3+2]})`; i.title=k===1?'state 1 — living':`state ${k} — decaying`; w.appendChild(i); } }
+function drawNb(){
+  const q=inspecting, s=cfg.species[q-1], offs=shapeOffsets(s.nb), cell=nbc.width/NBG, mid=(NBG-1)/2, set=new Set(offs.map(o=>o[0]+','+o[1]));
+  nbg.clearRect(0,0,nbc.width,nbc.height);
+  for(let y=0;y<NBG;y++)for(let x=0;x<NBG;x++){ const dx=x-mid, dy=y-mid; nbg.fillStyle=(dx===0&&dy===0)?s.color:set.has(dx+','+dy)?s.color+'88':'rgba(231,226,215,.05)'; nbg.fillRect(x*cell+1.5,y*cell+1.5,cell-3,cell-3); }
+  const out=offs.filter(o=>Math.abs(o[0])>mid||Math.abs(o[1])>mid).length; if(out){ nbg.fillStyle='#8b8f9b'; nbg.font='20px sans-serif'; nbg.fillText(`+${out} beyond view`,8,nbc.height-10); }
+}
+nbc.addEventListener('click',e=>{ const q=inspecting, s=cfg.species[q-1], r=nbc.getBoundingClientRect(), x=((e.clientX-r.left)/r.width*NBG)|0, y=((e.clientY-r.top)/r.height*NBG)|0, mid=(NBG-1)/2, dx=x-mid, dy=y-mid; if(!dx&&!dy) return;
+  const offs=shapeOffsets(s.nb); const k=offs.findIndex(o=>o[0]===dx&&o[1]===dy); if(k>=0) offs.splice(k,1); else offs.push([dx,dy]);
+  s.nb={type:'custom',r:s.nb.r,r2:s.nb.r2,mask:offs}; compileRules(); fillInspector(); });
+function drawRelations(){
+  const q=inspecting, i=q-1, s=cfg.species[i];
+  $('#iRel').innerHTML=`<table class="mx"><tr><th></th>${cfg.species.map((t,j)=>j===i?'':`<th style="color:${t.color}">${t.name.slice(0,5)}</th>`).join('')}</tr>
+    <tr><th class="r">counts as</th>${cfg.species.map((t,j)=>j===i?'':`<td><input type="number" step="0.5" min="-2" max="2" value="${cfg.aff[i][j]}" data-aff="${j}"></td>`).join('')}</tr>
+    <tr><th class="r">it counts me</th>${cfg.species.map((t,j)=>j===i?'':`<td><input type="number" step="0.5" min="-2" max="2" value="${cfg.aff[j][i]}" data-raff="${j}"></td>`).join('')}</tr>
+    <tr><th class="r">eats</th>${cfg.species.map((t,j)=>j===i?'':`<td><input type="checkbox" ${cfg.pred[i][j]?'checked':''} data-eat="${j}"></td>`).join('')}</tr>
+    <tr><th class="r">eaten by</th>${cfg.species.map((t,j)=>j===i?'':`<td><input type="checkbox" ${cfg.pred[j][i]?'checked':''} data-eaten="${j}"></td>`).join('')}</tr></table>
+    <div class="row" style="margin-top:6px"><label>Predators needed (k)</label><input type="number" id="iPredK" min="1" max="99" value="${cfg.predK[i]}"></div>`;
+  $$('#iRel [data-aff]').forEach(x=>x.onchange=()=>{ cfg.aff[i][+x.dataset.aff]=+x.value; compileRules(); });
+  $$('#iRel [data-raff]').forEach(x=>x.onchange=()=>{ cfg.aff[+x.dataset.raff][i]=+x.value; compileRules(); });
+  $$('#iRel [data-eat]').forEach(x=>x.onchange=()=>{ cfg.pred[i][+x.dataset.eat]=x.checked?1:0; compileRules(); });
+  $$('#iRel [data-eaten]').forEach(x=>x.onchange=()=>{ cfg.pred[+x.dataset.eaten][i]=x.checked?1:0; compileRules(); });
+  $('#iPredK').onchange=e=>{ cfg.predK[i]=+e.target.value; compileRules(); };
+}
+// inspector field wiring
+function bind(id,ev,fn){ $(id).addEventListener(ev,e=>{ const s=cfg.species[inspecting-1]; fn(s,e.target); compileRules(); fillInspector(); dirty=true; }); }
+bind('#iColor','input',(s,t)=>s.color=t.value); bind('#iName','change',(s,t)=>s.name=t.value.trim()||s.name); bind('#iEnabled','change',(s,t)=>s.enabled=t.checked);
+$('#iFocus').onclick=()=>{ sim.focus=sim.focus===inspecting?0:inspecting; dirty=true; fillInspector(); };
+bind('#iShape','change',(s,t)=>{ if(t.value==='custom'&&!s.nb.mask) s.nb.mask=shapeOffsets(s.nb); s.nb.type=t.value; });
+bind('#iR','input',(s,t)=>{ s.nb.r=+t.value; s.nb.r2=Math.min(s.nb.r2,s.nb.r-1); }); bind('#iR2','input',(s,t)=>s.nb.r2=Math.min(+t.value,s.nb.r-1));
+bind('#iBirth','change',(s,t)=>s.birth=t.value); bind('#iSurvive','change',(s,t)=>s.survive=t.value);
+bind('#iBirthP','input',(s,t)=>s.birthP=+t.value); bind('#iMort','input',(s,t)=>s.mortality=+t.value); bind('#iLife','change',(s,t)=>s.lifespan=+t.value|0); bind('#iSpawn','input',(s,t)=>s.spawn=+t.value);
+bind('#iNStates','change',(s,t)=>s.states=+t.value); bind('#iDecay','change',(s,t)=>s.decay=t.value); bind('#iDecayP','input',(s,t)=>s.decayP=+t.value);
+bind('#iGhosts','change',(s,t)=>s.ghosts=t.checked); bind('#iMono','change',(s,t)=>s.mono=t.checked); bind('#iDens','input',(s,t)=>s.density=+t.value);
+bind('#iStance','change',(s,t)=>s.stance=+t.value); bind('#iCarn','change',(s,t)=>s.carnivore=t.checked);
+['Identicon','Sym','Random'].forEach(kind=>{ $('#iGen'+kind).onclick=()=>{ const s=cfg.species[inspecting-1]; s.nb={type:'custom',r:s.nb.r,r2:s.nb.r2,mask:generateMask(kind.toLowerCase()==='sym'?'symmetric':kind.toLowerCase(),s.nb.r,Math.random)}; compileRules(); fillInspector(); dirty=true; }; });
+$('#iSave').onclick=()=>{ const s=cfg.species[inspecting-1]; saveAgent(s,s.name); $('#iSave').textContent='Saved ✓'; setTimeout(()=>$('#iSave').textContent='Save to library',1500); };
+$('#iRemove').onclick=()=>{ if(cfg.species.length<=1) return notice('The world needs at least one species.'); const i=inspecting-1; cfg.species.splice(i,1); cfg.aff.splice(i,1); cfg.aff.forEach(r=>r.splice(i,1)); cfg.pred.splice(i,1); cfg.pred.forEach(r=>r.splice(i,1)); cfg.predK.splice(i,1); inspecting=0; sim.focus=0; $('#inspector').style.display='none'; $('#overview').style.display='block'; afterRuleChange('Removed a species from the world.'); };
+bind('#iGrowth','change',(s,t)=>s.growth.mode=t.value); bind('#iTarget','change',(s,t)=>s.growth.target=+t.value); bind('#iSpread','input',(s,t)=>s.growth.spread=+t.value); bind('#iPeriod','change',(s,t)=>s.growth.period=+t.value|0);
+
+// ───────────────────────── library ─────────────────────────
+const LIB_KEY='emergence-lab-library-v1'; let library=[], libPersist=true;
+const strip=s=>{ const o=JSON.parse(JSON.stringify(s)); delete o.enabled; return o; };
+function builtinAgents(){ return DEFAULT_SPECIES.map(s=>({id:'builtin-'+s.name,name:s.name,builtin:true,species:strip(s)})); }
+function loadLibrary(){ try{ const raw=localStorage.getItem(LIB_KEY); if(raw) library=JSON.parse(raw); }catch(e){ libPersist=false; } if(!Array.isArray(library)||!library.length) library=builtinAgents(); }
+function persistLibrary(){ try{ localStorage.setItem(LIB_KEY,JSON.stringify(library)); }catch(e){ libPersist=false; } $('#libNote').textContent=(libPersist?'Saved in this browser. ':'This viewer blocks local storage, so export the library to keep it. ')+'Tick agents to enter them in the arena. "Add" drops a copy into the current world.'; }
+function saveAgent(s,name){ const sp=strip(s); sp.name=name; const k=library.findIndex(a=>a.name===name&&!a.builtin); const entry={id:'agent-'+Date.now().toString(36),name,builtin:false,species:sp,saved:new Date().toISOString()}; if(k>=0) library[k]=entry; else library.push(entry); persistLibrary(); buildLibrary(); log(W.step,`Saved <b style="color:${sp.color}">${name}</b> to the library.`); }
+const arenaPick=new Set();
+let libOpen=true;
+function buildLibrary(){
+  const el=$('#library'); el.innerHTML='';
+  $('#libCount').textContent=`(${library.length})`; $('#libArrow').textContent=libOpen?'▾':'▸'; $('#libBody').style.display=libOpen?'block':'none';
+  library.forEach(a=>{ const s=S(a.species); const d=document.createElement('div'); d.className='lib';
+    const K=shapeOffsets(s.nb).length;
+    d.innerHTML=`<input type="checkbox" ${arenaPick.has(a.id)?'checked':''} title="Enter in arena"><span class="sw" style="background:${s.color}"></span><span class="name" style="color:${s.color}" title="B${s.birth}/S${s.survive} · ${s.states} states · ${s.nb.type} (${K} cells) · ${GROWTH_SHORT[s.growth.mode]}">${a.name}</span><span class="k">B${s.birth}/S${s.survive}</span><button data-add title="Add a copy to the world">Add</button><button data-del title="Delete from library">×</button>`;
+    d.querySelector('input').onchange=e=>{ if(e.target.checked) arenaPick.add(a.id); else arenaPick.delete(a.id); };
+    d.querySelector('[data-add]').onclick=()=>addSpecies(S(a.species));
+    const del=d.querySelector('[data-del]'); let armed=false;
+    del.onclick=()=>{ if(!armed){ armed=true; del.textContent='sure?'; setTimeout(()=>{ armed=false; del.textContent='×'; },2500); return; } library=library.filter(x=>x!==a); arenaPick.delete(a.id); persistLibrary(); buildLibrary(); };
+    el.appendChild(d); });
+  persistLibrary();
+}
+$('#libHead').onclick=()=>{ libOpen=!libOpen; buildLibrary(); };
+function notice(msg){ const n=$('#notice'); n.textContent=msg; n.style.display='block'; clearTimeout(notice.t); notice.t=setTimeout(()=>n.style.display='none',4000); }
+function addSpecies(s){
+  if(cfg.species.length>=12) return notice('Twelve species is the ceiling for one world.');
+  const taken=new Set(cfg.species.map(x=>x.name)); if(taken.has(s.name)) s.name=s.name+' ′';
+  if(cfg.species.some(x=>x.color===s.color)) s.color=PALETTE.find(c=>!cfg.species.some(x=>x.color===c))||s.color;
+  const n=cfg.species.length; cfg.species.push(s);
+  cfg.aff.forEach((row,i)=>row.push(cfg.species[i].stance)); cfg.aff.push(cfg.species.map((x,j)=>j===n?1:s.stance));
+  cfg.pred.forEach((row,i)=>row.push(cfg.species[i].carnivore?1:0)); cfg.pred.push(cfg.species.map((x,j)=>j!==n&&s.carnivore?1:0)); cfg.predK.push(3);
+  afterRuleChange(`Added <b style="color:${s.color}">${s.name}</b> to the world.`);
+}
+function randomSpecies(rng,taken){
+  const s=S({name:inventName(rng,taken),color:PALETTE.find(c=>!cfg.species.some(x=>x.color===c))||'#'+((rng()*0xffffff)|0).toString(16).padStart(6,'0')}); randomizeOne(s,rng,cfg.species.length); return s;
+}
+function startArena(){
+  const chosen=library.filter(a=>arenaPick.has(a.id)); if(chosen.length<2) return notice('Tick at least two agents in the library first.');
+  if(chosen.length>12) return notice('Twelve agents is the ceiling.');
+  const species=chosen.map(a=>S(a.species)); const used=new Set();
+  species.forEach(s=>{ if(used.has(s.color)) s.color=PALETTE.find(c=>!used.has(c))||s.color; used.add(s.color); });
+  const st=$('#arenaStance').value, n=species.length;
+  const aff=species.map((a,i)=>species.map((b,j)=>i===j?1:(st==='own'?a.stance:+st)));
+  const pred=species.map((a,i)=>species.map((b,j)=>i!==j&&a.carnivore?1:0));
+  cfg={species,aff,pred,predK:Array(n).fill(3)}; sim.pattern=$('#arenaLayout').value; $('#pattern').value=sim.pattern; inspecting=0; $('#inspector').style.display='none'; $('#overview').style.display='block';
+  afterRuleChange(`Arena: ${species.map(s=>`<b style="color:${s.color}">${s.name}</b>`).join(' vs ')}.`);
+}
+$('#bArena').onclick=startArena;
+$('#bAddRandom').onclick=()=>addSpecies(randomSpecies(Math.random,new Set(cfg.species.map(x=>x.name))));
+$('#bLibReset').onclick=()=>{ const mine=library.filter(a=>!a.builtin); library=[...builtinAgents(),...mine]; persistLibrary(); buildLibrary(); };
+$('#bLibExport').onclick=()=>{ ioMode='lib'; $('#ioTitle').textContent='Library (copy to save)'; $('#ioText').value=JSON.stringify(library,null,1); $('#ioApply').textContent='Merge into library'; $('#io').classList.add('show'); };
+$('#bLibImport').onclick=()=>{ ioMode='lib'; $('#ioTitle').textContent='Paste a library or a single agent'; $('#ioText').value=''; $('#ioApply').textContent='Merge into library'; $('#io').classList.add('show'); };
+
+// ───────────────────────── exploration ─────────────────────────
+const pick=(rng,arr)=>arr[(rng()*arr.length)|0];
+function randSetStr(rng,K,loF,hiF,kMin,kMax){ const set=new Uint8Array(K+1); const lo=Math.max(1,Math.round(K*loF)), hi=Math.max(lo,Math.round(K*hiF)), k=kMin+((rng()*(kMax-kMin+1))|0); for(let i=0;i<k;i++){ const v=lo+((rng()*(hi-lo+1))|0); const e=rng()<0.6?Math.min(K,v+((rng()*Math.max(1,K*0.12))|0)):v; for(let u=v;u<=e;u++) set[u]=1; } return setToStr(set); }
+function randomizeOne(s,rng,i){
+    const n=cfg.species.length;
+    const type=pick(rng,['moore','moore','moore','vn','circle','circle','ring','cross','x','hline','front','knight','star','hollow','checker','crescent','hook','corners','identicon','symmetric','scatter']);
+    const r=type==='knight'?1:['circle','ring','hollow','crescent','identicon','symmetric','scatter'].includes(type)?2+((rng()*4)|0):1+((rng()*3)|0);
+    if(['identicon','symmetric','scatter'].includes(type)) s.nb={type:'custom',r,r2:0,mask:generateMask(type==='scatter'?'random':type,r,rng)};
+    else s.nb={type,r,r2:(type==='ring'||type==='hollow')?(rng()*(r-1))|0:0,mask:null};
+    const K=shapeOffsets(s.nb).length;
+    s.birth=randSetStr(rng,K,0.15,0.5,1,2); s.survive=randSetStr(rng,K,0.1,0.65,1,3);
+    s.states=pick(rng,[2,2,3,4,5,6,8,10]); s.decay=pick(rng,['linear','linear','stochastic','crowd','revive']); s.decayP=+(0.1+rng()*0.6).toFixed(2); s.ghosts=rng()<0.3;
+    s.birthP=pick(rng,[1,1,1,0.9,0.7,0.5]); s.mortality=pick(rng,[0,0,0,0.005,0.02]); s.lifespan=pick(rng,[0,0,0,40,120]); s.spawn=pick(rng,[0,0,0,0.05]); s.enabled=true;
+    const mode=pick(rng,Object.keys(GROWTH_MODES)); let target=pick(rng,[0,-1,...Array.from({length:n},(_,j)=>j+1).filter(j=>j!==i+1)]);
+    s.growth={mode,dir:1+((rng()*8)|0),spread:pick(rng,[0,1,1,2]),target,period:pick(rng,[10,25,50,100])};
+    s.stance=pick(rng,[0,0,0,0.5,-0.5,1,-1]); s.carnivore=rng()<0.2;
+    if(i<cfg.aff.length) for(let j=0;j<n;j++){ cfg.aff[i][j]=i===j?1:pick(rng,[0,0,0,0,0.5,0.5,1,-0.5,-1]); cfg.pred[i][j]=i!==j&&rng()<0.12?1:0; }
+    if(i<cfg.predK.length) cfg.predK[i]=2+((rng()*3)|0);
+}
+function randomizeRules(){
+  const rng=mulberry32((Math.random()*1e9)|0), taken=new Set();
+  cfg.species.forEach((s,i)=>{ randomizeOne(s,rng,i); s.name=inventName(rng,taken); taken.add(s.name); });
+  afterRuleChange('Rules randomized and renamed. Reseeded.');
+}
+function mutateRules(){
+  const rng=mulberry32((Math.random()*1e9)|0), notes=[], n=cfg.species.length, cnt=1+((rng()*3)|0);
+  for(let m=0;m<cnt;m++){ const i=(rng()*n)|0, s=cfg.species[i], K=shapeOffsets(s.nb).length, w=rng();
+    if(w<0.22){ const set=parseSet(s.birth,K); set[1+((rng()*K)|0)]^=1; if(!set.some(v=>v)) set[Math.max(1,K>>2)]=1; s.birth=setToStr(set); notes.push(`${s.name} birth → ${s.birth}`); }
+    else if(w<0.44){ const set=parseSet(s.survive,K); set[(rng()*(K+1))|0]^=1; if(!set.some(v=>v)) set[Math.max(1,K>>2)]=1; s.survive=setToStr(set); notes.push(`${s.name} survive → ${s.survive}`); }
+    else if(w<0.54){ s.states=clamp(s.states+pick(rng,[-3,-1,1,2,4]),2,20); notes.push(`${s.name} states → ${s.states}`); }
+    else if(w<0.64){ const j=(rng()*n)|0; if(j!==i){ cfg.aff[i][j]=clamp(cfg.aff[i][j]+pick(rng,[-1,-0.5,0.5,1]),-2,2); notes.push(`${s.name}→${cfg.species[j].name} affinity ${cfg.aff[i][j]}`); } }
+    else if(w<0.74){ const oldK=K; s.nb.r=clamp(s.nb.r+pick(rng,[-1,1]),1,6); s.nb.r2=Math.min(s.nb.r2,s.nb.r-1); const nk=shapeOffsets(s.nb).length; if(nk!==oldK){ const f=nk/oldK; const rs=set=>{ const o=new Uint8Array(nk+1); for(let v=0;v<=oldK;v++) if(set[v]) o[Math.min(nk,Math.round(v*f))]=1; return setToStr(o); }; s.birth=rs(parseSet(s.birth,oldK)); s.survive=rs(parseSet(s.survive,oldK)); } notes.push(`${s.name} radius → ${s.nb.r} (rules rescaled)`); }
+    else if(w<0.79){ s.growth.mode=pick(rng,Object.keys(GROWTH_MODES)); notes.push(`${s.name} growth → ${GROWTH_SHORT[s.growth.mode]}`); }
+    else if(w<0.82){ const kind=pick(rng,['identicon','symmetric','random']); s.nb={type:'custom',r:Math.max(2,s.nb.r),r2:0,mask:generateMask(kind,Math.max(2,s.nb.r),rng)}; const nk=shapeOffsets(s.nb).length, f=nk/K; const rs=set=>{ const o=new Uint8Array(nk+1); for(let v=0;v<=K;v++) if(set[v]) o[Math.min(nk,Math.round(v*f))]=1; return setToStr(o); }; s.birth=rs(parseSet(s.birth,K)); s.survive=rs(parseSet(s.survive,K)); notes.push(`${s.name} grew a new ${kind} neighbourhood (rules rescaled)`); }
+    else if(w<0.9){ s.decay=pick(rng,Object.keys(DECAY_MODES)); notes.push(`${s.name} decay → ${DECAY_LABEL[s.decay]}`); }
+    else { const j=(rng()*n)|0; if(j!==i){ cfg.pred[i][j]^=1; notes.push(`${s.name} ${cfg.pred[i][j]?'now eats':'stops eating'} ${cfg.species[j].name}`); } } }
+  afterRuleChange('Mutated: '+notes.join('; ')+'. Reseeded.');
+}
+function afterRuleChange(note){ compileRules(); if(inspecting) fillInspector(); else buildOverview(); sim.seed=+$('#seed').value; initWorld(); if(note) log(0,note); }
+
+// ───────────────────────── wiring ─────────────────────────
+$('#bPlay').onclick=()=>{ sim.playing=!sim.playing; $('#bPlay').textContent=sim.playing?'Pause':'Play'; dirty=true; };
+$('#bStep').onclick=()=>{ sim.playing=false; $('#bPlay').textContent='Play'; record(step()); dirty=true; };
+$('#bReset').onclick=()=>{ sim.seed=+$('#seed').value; initWorld(); };
+$('#bRandSeed').onclick=()=>{ $('#seed').value=(Math.random()*1e6)|0; sim.seed=+$('#seed').value; initWorld(); };
+$('#speed').oninput=e=>{ sim.speed=+e.target.value; $('#speedV').textContent=sim.speed+'/s'; };
+$('#size').onchange=e=>{ sim.size=+e.target.value; initWorld(); };
+$('#pattern').onchange=e=>{ sim.pattern=e.target.value; initWorld(); };
+$('#wrap').onchange=e=>{ sim.wrap=e.target.value==='1'; initWorld(); };
+$('#brush').onchange=e=>sim.brush=+e.target.value;
+$('#showDecay').onchange=e=>{ sim.showDecay=e.target.checked; dirty=true; };
+$('#bMutate').onclick=mutateRules; $('#bRandomize').onclick=randomizeRules;
+$('#bDefaults').onclick=()=>{ cfg=defaults(); inspecting=0; $('#inspector').style.display='none'; $('#overview').style.display='block'; afterRuleChange('Restored default rules.'); };
+let ioMode='cfg';
+$('#bExport').onclick=()=>{ ioMode='cfg'; $('#ioApply').textContent='Apply and reseed'; $('#ioTitle').textContent='Configuration (copy to save)'; $('#ioText').value=JSON.stringify({sim:{size:sim.size,pattern:sim.pattern,seed:sim.seed},...cfg},null,1); $('#io').classList.add('show'); };
+$('#bImport').onclick=()=>{ ioMode='cfg'; $('#ioApply').textContent='Apply and reseed'; $('#ioTitle').textContent='Paste a configuration'; $('#ioText').value=''; $('#io').classList.add('show'); };
+$('#ioClose').onclick=()=>$('#io').classList.remove('show');
+$('#ioApply').onclick=()=>{ try{ const o=JSON.parse($('#ioText').value);
+  if(ioMode==='lib'){ const arr=Array.isArray(o)?o:(o.species&&!Array.isArray(o.species)?[o]:(o.species?o.species.map(sp=>({name:sp.name,species:sp})):[])); let added=0; arr.forEach(a=>{ if(!a||!a.species) return; const entry={id:a.id||'agent-'+Date.now().toString(36)+added,name:a.name||a.species.name||'Unnamed',builtin:false,species:strip(S(a.species)),saved:a.saved||new Date().toISOString()}; const k=library.findIndex(x=>x.id===entry.id); if(k>=0) library[k]=entry; else library.push(entry); added++; }); persistLibrary(); buildLibrary(); $('#io').classList.remove('show'); log(W.step,`Merged ${added} agent${added===1?'':'s'} into the library.`); return; }
+  if(o.species&&o.aff&&o.pred){ cfg={species:o.species.map(x=>S(x)),aff:o.aff,pred:o.pred,predK:o.predK||cfg.predK}; if(o.sim){ if(o.sim.size){sim.size=o.sim.size;$('#size').value=o.sim.size;} if(o.sim.pattern){sim.pattern=o.sim.pattern;$('#pattern').value=o.sim.pattern;} if(o.sim.seed!=null) $('#seed').value=o.sim.seed; } $('#io').classList.remove('show'); inspecting=0; $('#inspector').style.display='none'; $('#overview').style.display='block'; afterRuleChange('Imported configuration.'); } else notice('That JSON needs species, aff and pred fields.'); }catch(err){ notice('Could not parse that JSON: '+err.message); } };
+$('#tL').onclick=()=>{ $('#controls').classList.toggle('hidden'); fitCanvas(); }; $('#tR').onclick=()=>{ $('#observatory').classList.toggle('hidden'); fitCanvas(); };
+addEventListener('resize',fitCanvas);
+addEventListener('keydown',e=>{ if(['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return; if(e.code==='Space'){ e.preventDefault(); $('#bPlay').click(); } if(e.key==='n') $('#bStep').click(); if(e.key==='r') $('#bRandSeed').click(); if(e.key==='Escape'&&inspecting) closeInspector(); });
+
+// programmatic access for batch experiments (console): lab.run(cfgObject, seed, steps) → final metrics + log-free summary
+window.lab={ get cfg(){return cfg;}, set cfg(c){ cfg=c; compileRules(); }, sim, step, measure, initWorld, compileRules, shapeOffsets, generateMask, inventName, library:()=>library,
+  run(c,seed,steps=400,quiet=true){ const saved={cfg,seed:sim.seed}; cfg=JSON.parse(JSON.stringify(c)); compileRules(); sim.seed=seed; initWorld(); let m; const pops=[]; for(let i=0;i<steps;i++){ m=step(); record(m); if(i%10===0) pops.push(m.pop.slice(1)); } const out={final:m,longestRun:A.longest,period:A.period,pops}; if(quiet){ cfg=saved.cfg; compileRules(); sim.seed=saved.seed; initWorld(); } return out; } };
+// boot
+cfg=defaults(); compileRules(); loadLibrary(); buildOverview(); initWorld(); requestAnimationFrame(loop);
+</script>
+</body>
+</html>

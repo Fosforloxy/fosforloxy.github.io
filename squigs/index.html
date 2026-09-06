@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Squig Lab</title>
+<title>Squig Lab — Orbless</title>
 <style>
   :root{
     --paper:#faf7f0;
@@ -71,26 +71,20 @@
   @media(prefers-reduced-motion:reduce){button:hover{transform:none;box-shadow:none}}
   .btnrow{display:flex;gap:8px;flex-wrap:wrap}
   .seedrow{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;margin-bottom:9px}
+
+  .project-nav{display:flex;flex-wrap:wrap;gap:8px 18px;margin:0 0 16px;font-size:14px;line-height:1.5}
+  .project-nav a{color:var(--ink);text-underline-offset:3px}
+  .project-nav a[aria-current=page]{font-weight:700}
+  .project-nav a:focus-visible{outline:2px solid currentColor;outline-offset:4px}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <a href="../" style="display:inline-block;font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#6f6a5c;text-decoration:none;margin-bottom:12px">&#8592; Catalog</a>
+<nav class="project-nav" aria-label="Project navigation"><a href="../">&larr; All projects</a><a href="./" aria-current="page">Orbless</a><a href="orb-studies.html">Orb studies</a></nav>
   <header>
     <h1>SQUIG&nbsp;LAB</h1>
+    <span class="eyebrow">specimen generator &middot; phase 5 &middot; space-filling walk</span>
   </header>
-
-  <section style="padding:18px 0 28px;border-bottom:2px solid var(--ink);margin-bottom:24px">
-    <p style="font-size:13px;line-height:1.8;color:#43403a;max-width:620px;margin-bottom:24px">I've been drawing squigs in notebooks for years — they started as a doodle habit and gradually developed their own internal grammar: bodies, arms, curls, hooks, bulbs, lines that weave over and under each other. The generator is a procedural expansion of that vocabulary. Noise drives the path curvature, a spatial hash lets arms sense and follow each other, and crossing detection handles the over/under. The controls map directly to decisions that happen intuitively with a pen.</p>
-    <div style="border:1.5px solid var(--ink);background:var(--paper);padding:8px;display:inline-block;max-width:100%;box-shadow:4px 4px 0 rgba(28,27,24,.10);margin-bottom:28px">
-      <img src="sketchbook.jpg" alt="A sketchbook page filled with hand-drawn squig characters" style="display:block;width:100%;max-width:600px;height:auto">
-      <p style="font-size:10px;letter-spacing:.08em;color:#8a8474;margin-top:6px">Sketchbook, ongoing</p>
-    </div>
-    <div style="display:flex;align-items:center;gap:10px">
-      <span style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#6f6a5c">Generator below</span>
-      <span style="font-size:16px;color:#6f6a5c;line-height:1">&#8595;</span>
-    </div>
-  </section>
 
   <main>
     <div class="stage">
@@ -140,8 +134,6 @@
       </section>
     </div>
   </main>
-
-
 </div>
 
 <script>
@@ -163,20 +155,28 @@ const lerpAngle = (a,b,t) => a + angNorm(b-a)*t;
 const snap90 = a => Math.round(a/(Math.PI/2))*(Math.PI/2);
 const lerp = (a,b,t) => a+(b-a)*t;
 const clamp = (v,lo,hi) => Math.min(hi, Math.max(lo, v));
+function pointSegDist(px,py, ax,ay, bx,by){
+  const dx=bx-ax, dy=by-ay;
+  const L2 = dx*dx+dy*dy;
+  let t = L2 ? ((px-ax)*dx + (py-ay)*dy)/L2 : 0;
+  t = clamp(t,0,1);
+  const x = ax+dx*t, y = ay+dy*t;
+  return Math.hypot(px-x, py-y);
+}
 
 /* ---------- parameters ---------- */
 const P = {};
 const DEFS = [
- ['g-structure','arms','arms',1,10,1,6],
- ['g-structure','armLen','arm length',0.15,0.85,0.01,0.45],
+ ['g-structure','arms','arms',1,10,1,4],
+ ['g-structure','armLen','arm length',0.15,2.5,0.01,1.2],
  ['g-structure','lenVar','length variance',0,0.8,0.01,0.35],
  ['g-structure','armW','arm thickness',0.008,0.05,0.001,0.022],
- ['g-structure','compact','tangle (compactness)',0,1,0.01,0.55],
- ['g-structure','bodyR','body size',0.02,0.14,0.005,0.06],
+ ['g-structure','compact','glyph size (tangle)',0,1,0.01,0.7],
+ ['g-structure','blobs','blobs (on-path)',0,1,0.01,0.4],
  ['g-path','rect','rectilinearity',0,1,0.01,0.12],
  ['g-path','turnFreq','turn frequency',0,1,0.01,0.5],
  ['g-path','wiggle','wiggle',0,0.5,0.01,0.22],
- ['g-path','follow','nesting (follow)',0,1,0.01,0.45],
+ ['g-path','follow','wall stickiness',0,1,0.01,0.85],
  ['g-path','cross','crossing (seek)',0,1,0.01,0.35],
  ['g-tips','curlChance','curl chance',0,1,0.01,0.4],
  ['g-tips','curlTurns','curl tightness',0.4,2.5,0.05,1.1],
@@ -211,7 +211,7 @@ function buildControls(){
   }
   const chk = document.createElement('label');
   chk.className = 'check';
-  chk.innerHTML = '<input type="checkbox" id="in-solid"> solid black body';
+  chk.innerHTML = '<input type="checkbox" id="in-solid"> solid black blobs';
   document.getElementById('g-structure').appendChild(chk);
   chk.querySelector('input').addEventListener('change', draw);
   document.getElementById('in-symN').addEventListener('change', draw);
@@ -224,84 +224,223 @@ function buildSquig(S){
   const rng = mulberry32(seed*2654435761 + 1013);
   const noise = makeNoise(rng);
   const cx = S/2, cy = S/2;
-  const bodyR = P.bodyR * S;
   const wpx  = P.armW * S;
-  const step = S * 0.008;
+  const w2 = wpx/2;
+  const lwModel = Math.max(1.4, S*0.0042*P.outline); /* render outline weight, for clearance */
+  /* sampling must scale with tube width: the hidden zone at a crossing is
+     ~one tube-width wide, and outline breaks are found by sign changes
+     between consecutive samples — coarse sampling at thin widths skips
+     right over them. Capped so default width behaves identically. */
+  const step = Math.min(S * 0.008, wpx * 0.365);
   const symN = parseInt(val('in-symN'));
   const armLenPx = P.armLen * S * 0.55;
-  const maxR = bodyR + lerp(1.05, 0.30, P.compact) * armLenPx + S*0.03;
+  const maxR = S * lerp(0.32, 0.10, P.compact);
+  /* the containment region is an irregular blob, not a circle — its wavy
+     boundary (plus hairpin turnbacks at it) is what makes silhouettes lumpy */
+  const regHarm = [];
+  for (let k=1; k<=3; k++)
+    regHarm.push({a: lerp(0.03, 0.13 - k*0.03, rng()), p: rng()*TAU});
+  const regionRad = th => {
+    let r = 1;
+    for (let k=0; k<regHarm.length; k++) r += regHarm[k].a * Math.cos((k+1)*th + regHarm[k].p);
+    return maxR * r;
+  };
+  let blobsLeft = Math.min(3, Math.round(P.blobs * (1.2 + rng()*1.6)));
+  const allBase = []; /* base-wedge ink points, for adjacent strand seeding */
   const turnEvery = Math.round(lerp(26, 7, P.turnFreq));
+  const maxTurn = step / (0.85 * wpx);
 
-  /* sensing hash (built during growth, wedge arms only) */
+  /* sensing hash for growth behaviors */
   const sense = wpx*3.2;
-  const gap = wpx*1.55;
+  /* the white channel between parallel tubes: sampled once per squig, then
+     held constant — uniformity of this gap is the style's signature */
+  const gapEdge = wpx * lerp(0.30, 0.50, rng());
+  const gap = wpx + gapEdge;
   const cell = sense*0.75;
   const hash = new Map();
   const hkey = (x,y) => ((x/cell)|0) + ':' + ((y/cell)|0);
   function insertPt(p, arm, idx, tang){
-    const k = hkey(p.x, p.y);
-    let a = hash.get(k);
-    if (!a){ a = []; hash.set(k, a); }
-    a.push({x:p.x, y:p.y, arm:arm, idx:idx, t:tang});
+    /* insert the point AND its symmetry copies: the pen must sense its own
+       rotated siblings or symmetric squigs plow through themselves */
+    const log = [];
+    for (let c=0; c<symN; c++){
+      const rot = c*TAU/symN, cs = Math.cos(rot), sn = Math.sin(rot);
+      const x0 = p.x-cx, y0 = p.y-cy;
+      const x = cx + x0*cs - y0*sn, y = cy + x0*sn + y0*cs;
+      const k = hkey(x, y);
+      let a = hash.get(k);
+      if (!a){ a = []; hash.set(k, a); }
+      const item = {x:x, y:y, arm:arm + c*100000, idx:idx, t:tang + rot};
+      a.push(item);
+      if (c === 0) allBase.push({x:x, y:y, t:tang});
+      log.push({arr:a, item:item});
+    }
+    return log;
   }
-  const selfSep = Math.ceil(wpx*4/step);
-  function nearestTube(pos, arm, idx, maxD){
+  const senseSep = Math.ceil(wpx*2.2/step) + 2;
+  function nearestTube(pos, arm, idx, heading){
     const cx0 = (pos.x/cell)|0, cy0 = (pos.y/cell)|0;
-    let best = null, bd = maxD;
+    let best = null, bd = sense;
     for (let dx=-1; dx<=1; dx++) for (let dy=-1; dy<=1; dy++){
       const a = hash.get((cx0+dx)+':'+(cy0+dy));
       if (!a) continue;
       for (const q of a){
-        if (q.arm === arm && Math.abs(q.idx - idx) < selfSep) continue;
+        if (q.arm === arm && Math.abs(q.idx - idx) < senseSep) continue;
+        /* ignore own points sitting directly behind the pen — otherwise the
+           follow controller chases its own tail and curls into itself */
+        if (q.arm === arm && heading != null &&
+            Math.cos(Math.atan2(q.y-pos.y, q.x-pos.x) - heading) < -0.72) continue;
         const d = Math.hypot(q.x-pos.x, q.y-pos.y);
         if (d < bd){ bd = d; best = q; }
       }
     }
     return best ? {q:best, d:bd} : null;
   }
+  /* how far ahead along a ray is open (no ink within the gap, inside bounds) */
+  function freeAhead(pos, h, arm, idx){
+    const NS = 4;
+    for (let s=1; s<=NS; s++){
+      const t = s/NS*sense;
+      const px = pos.x + Math.cos(h)*t, py = pos.y + Math.sin(h)*t;
+      if (Math.hypot(px-cx, py-cy) > regionRad(Math.atan2(py-cy, px-cx)) + wpx) return (s-1)/NS*sense;
+      const nr = nearestTube({x:px, y:py}, arm, idx, null);
+      if (nr && nr.d < gap*0.92) return (s-1)/NS*sense;
+    }
+    return sense;
+  }
 
   let armCounter = 0;
+  const relations = [];
 
-  function grow(angle0, depth, startPos, budget){
+  function grow(angle0, depth, startPos, budget, parentId, parentIdx){
     const out = [];
     const armId = armCounter++;
-    let heading = angle0 + (rng()-0.5)*0.7;
-    let pos = startPos ? {x:startPos.x, y:startPos.y}
-      : {x: cx + Math.cos(angle0)*bodyR*0.75, y: cy + Math.sin(angle0)*bodyR*0.75};
+    if (parentId != null) relations.push({parent:parentId, child:armId, pIdx:parentIdx});
+    let heading = angle0 + (rng()-0.5)*(parentId != null ? 0.7 : 0.3);
+    let pos = {x:startPos.x, y:startPos.y};
     const len = budget != null ? budget
       : armLenPx * clamp(1 + (rng()*2-1)*P.lenVar, 0.25, 2.2);
     const n = Math.max(8, Math.round(len/step));
     const nOff = rng()*1000;
     const pts = [{x:pos.x, y:pos.y}];
-    let mode = 0, timer = 0, cool = 6;   /* 0 none, 1 follow, 2 seek, 3 punch */
+    const insLog = []; /* parallel to loop-inserted pts, for retraction */
+    const blobSites = []; /* on-path blobs owned by this strand */
+    /* when a strand ends because of contact, back the tip out until the cap
+       sits at the standard clearance — a pen stops SHORT of a wall, it
+       doesn't die inside one */
+    function retract(deep){
+      /* never retract past a branch point — that orphans the child */
+      let minLen = 2;
+      for (const r of relations)
+        if (r.parent === armId && r.pIdx + 2 > minLen) minLen = r.pIdx + 2;
+      for (const b of blobSites)
+        if (b.idx + 2 > minLen) minLen = b.idx + 2;
+      const popTip = () => {
+        pts.pop();
+        const log = insLog.pop();
+        if (log) for (const e of log){
+          const ix = e.arr.indexOf(e.item);
+          if (ix >= 0) e.arr.splice(ix, 1);
+        }
+      };
+      const tipClear = () => {
+        const tip = pts[pts.length-1];
+        return nearestTube(tip, armId, pts.length-1, null);
+      };
+      /* deep: the strand died in the shadow just past a crossing — retract
+         back THROUGH the crossing so the tip ends on the approach side,
+         where spacing was legal, instead of dangling past the far edge */
+      if (deep){
+        let dg = 90;
+        while (pts.length > minLen && insLog.length > 0 && dg-- > 0){
+          const nr = tipClear();
+          if (!nr || nr.d >= gap) break;
+          popTip();
+        }
+      }
+      /* tier 1: overlapping OUTLINES are a hard no — clearance must cover
+         the outline weight, not just the centerline separation */
+      let guard = 40;
+      while (pts.length > minLen && insLog.length > 0 && guard-- > 0){
+        const nr = tipClear();
+        if (!nr || nr.d >= wpx*1.02 + lwModel) break;
+        popTip();
+      }
+      /* tier 2: cosmetic — try for the full white channel, but only spend a
+         few steps on it, or long sub-gap follows bleed out */
+      let soft = 8;
+      while (pts.length > minLen && insLog.length > 0 && soft-- > 0){
+        const nr = tipClear();
+        if (!nr || nr.d >= gap*0.95) break;
+        popTip();
+      }
+      pos = {x: pts[pts.length-1].x, y: pts[pts.length-1].y};
+      if (pts.length > 1){
+        const pp = pts[pts.length-2];
+        heading = Math.atan2(pos.y-pp.y, pos.x-pp.x);
+      }
+    }
+    /* modes: 0 free wander, 1 wall-follow (the resting state), 2 crossing-seek,
+       3 crossing-commit, 4 hairpin turnback */
+    let mode = 0, timer = 0, cool = 6, hpCool = 0, hpSign = 1, hpTurned = 0, x3 = 0, sinceCross = 9999;
 
     for (let i=1; i<=n; i++){
-      /* containment (strongest) */
+      const prevH = heading;
       const dx = pos.x-cx, dy = pos.y-cy, d = Math.hypot(dx,dy);
-      if (d > maxR){
+      const rEdge = regionRad(Math.atan2(dy,dx));
+      if (d > rEdge){
         const toC = Math.atan2(-dy,-dx);
-        heading = lerpAngle(heading, toC, clamp((d-maxR)/(S*0.06),0,1)*0.28);
+        heading = lerpAngle(heading, toC, clamp((d-rEdge)/(S*0.06),0,1)*0.28);
       }
       if (cool > 0) cool--;
-      const near = nearestTube(pos, armId, i, sense);
-      /* mode entry */
-      if (mode === 0 && cool === 0 && near){
-        if (rng() < P.follow*0.10){ mode = 1; timer = Math.round(lerp(25,90,rng())); }
-        else if (rng() < P.cross*0.06){ mode = 2; timer = 60; }
+      if (hpCool > 0) hpCool--;
+      sinceCross++;
+      /* two views of the world: `near` sees everything (safety checks must
+         never be blind); `nearS` applies the own-tail behind-filter and is
+         only for choosing a follow target (prevents tail-chasing) */
+      const near = nearestTube(pos, armId, i, null);
+      const nearS = nearestTube(pos, armId, i, heading);
+      /* deep penetration outside a deliberate crossing is unrecoverable
+         without visible mush: lift the pen instead. Active from birth —
+         except against the parent tube at a branch root */
+      const rootContact = parentId != null && i < 8 && near &&
+                          (near.q.arm % 100000) === parentId;
+      if (near && near.d < wpx*0.7 && mode !== 2 && mode !== 3 && i > 3 && !rootContact){
+        retract(sinceCross < Math.ceil(wpx*3/step)); break;
       }
-      /* mode steering */
-      if (mode === 1){
-        if (!near){ mode = 0; cool = 10; }
-        else {
-          const q = near.q, dirN = Math.atan2(q.y-pos.y, q.x-pos.x);
-          let t = q.t; if (Math.cos(heading - t) < 0) t += Math.PI;
-          const err = (near.d - gap)/gap;
-          const target = err > 0
-            ? lerpAngle(t, dirN, clamp(err,0,0.6))
-            : lerpAngle(t, dirN+Math.PI, clamp(-err,0,0.6));
-          heading = lerpAngle(heading, target, 0.4);
-          if (--timer <= 0){ mode = 0; cool = 20; }
+
+      /* blocked ahead? occasionally punch through, otherwise hairpin back —
+         this turnback is what generates the boustrophedon meander texture.
+         Also active under the disc: invisible re-routing to an open exit */
+      if ((mode === 0 || mode === 1) && hpCool === 0 && i > 4){
+        const fA = freeAhead(pos, heading, armId, i);
+        if (fA < wpx*1.8){
+          if (near && rng() < P.cross*0.35){
+            mode = 2; timer = 30;
+          } else {
+            const fL = freeAhead(pos, heading - 0.95, armId, i);
+            const fR = freeAhead(pos, heading + 0.95, armId, i);
+            if (fL <= 0 && fR <= 0){ retract(sinceCross < Math.ceil(wpx*3/step)); break; } /* truly trapped */
+            mode = 4; hpSign = (fL > fR) ? -1 : 1; hpTurned = 0;
+          }
         }
+      }
+
+      /* wall-following is the default whenever ink is near, not a rare event */
+      if (mode === 0 && nearS && cool === 0) mode = 1;
+      if (mode === 1){
+        if (!nearS){ mode = 0; cool = 4; }
+        else if (rng() < (1 - P.follow)*0.02){ mode = 0; cool = Math.round(lerp(10,30,rng())); }
+        else if (cool === 0 && rng() < P.cross*0.015){ mode = 2; timer = 30; }
+      }
+      if (mode === 1 && nearS){
+        const q = nearS.q, dirN = Math.atan2(q.y-pos.y, q.x-pos.x);
+        let t = q.t; if (Math.cos(heading - t) < 0) t += Math.PI;
+        const err = (nearS.d - gap)/gap;
+        const target = err > 0
+          ? lerpAngle(t, dirN, clamp(err,0,0.6))
+          : lerpAngle(t, dirN+Math.PI, clamp(-err,0,0.6));
+        heading = lerpAngle(heading, target, 0.4);
       } else if (mode === 2){
         if (!near){ mode = 0; cool = 10; }
         else {
@@ -309,37 +448,94 @@ function buildSquig(S){
           let perp = q.t + Math.PI/2;
           if (Math.cos(perp - dirN) < 0) perp += Math.PI;
           heading = lerpAngle(heading, perp, 0.35);
-          if (near.d < wpx*0.8){ mode = 3; timer = Math.ceil((wpx*2.8+gap)/step); }
-          else if (--timer <= 0){ mode = 0; cool = 15; }
+          /* commit only on a steep approach (>=~50deg) so crossings stay
+             decisive — no tangential merging (borrowed early from phase F) */
+          if (near.d < wpx*0.8 && Math.abs(Math.sin(angNorm(heading - q.t))) > 0.75){
+            mode = 3; timer = Math.ceil((wpx*2.8+gap)/step); x3 = 0;
+          }
+          else if ((timer -= (near.d < wpx ? 3 : 1)) <= 0){
+            if (near.d < gap*0.9){
+              /* gave up on the crossing while inside the channel: turn back
+                 out — never linger tangentially against another tube */
+              mode = 4; hpTurned = 0;
+              hpSign = angNorm(dirN - heading) > 0 ? -1 : 1;
+            } else { mode = 0; cool = 15; }
+          }
         }
       } else if (mode === 3){
-        if (--timer <= 0){ mode = 0; cool = 18; }
+        /* a crossing bores through ONE tube, perpendicular-ish. Depth alone
+           is normal (mid-traverse passes over the crossed centerline) — but
+           deep AND near-PARALLEL means we've tunneled into a fold and are
+           riding it: back out to the approach side entirely */
+        if (near && near.d < wpx*0.95 &&
+            Math.abs(Math.sin(angNorm(heading - near.q.t))) < 0.5){
+          retract(true); break;
+        }
+        if (--timer <= 0){
+          const lim = Math.ceil(wpx*3/step);
+          if (near && near.d < gap*0.9 && x3 < lim){
+            timer = 2; x3 += 2; /* not clear of the far side yet: keep going */
+          } else if (near && near.d < gap*0.9){
+            /* fully extended and still pressed: turn back out, never linger */
+            mode = 4; hpTurned = 0; x3 = 0;
+            hpSign = angNorm(Math.atan2(near.q.y-pos.y, near.q.x-pos.x) - heading) > 0 ? -1 : 1;
+          } else { mode = 0; cool = 6; x3 = 0; sinceCross = 0; }
+        }
+      } else if (mode === 4){
+        heading += hpSign * maxTurn;
+        hpTurned += maxTurn;
+        /* swinging into ink early in the turn means the turnback doesn't fit:
+           end the strand rather than plow through */
+        if (near && near.d < wpx*0.8 && hpTurned < Math.PI*0.45){ retract(); break; }
+        if (hpTurned >= Math.PI*0.92){ mode = 0; cool = 2; hpCool = 12; }
       }
-      /* base curvature, damped while in a behavior */
-      const damp = (mode===1||mode===3) ? 0.15 : (mode===2 ? 0.3 : 1);
+      /* contact resolver: outlines touching while near-parallel is a graze
+         (the post-hairpin band the follow controller can't see through its
+         behind-filter) — push out. Only at true contact; never anti-follow */
+      if ((mode === 0 || mode === 1) && near && near.d < wpx*1.05 &&
+          Math.abs(Math.sin(angNorm(heading - near.q.t))) < 0.6){
+        const away = Math.atan2(pos.y-near.q.y, pos.x-near.q.x);
+        heading = lerpAngle(heading, away, 0.3);
+      }
+      const damp = (mode===1||mode===3) ? 0.15 : (mode===2 ? 0.3 : (mode===4 ? 0 : 1));
       heading += (noise(nOff + i*0.13)-0.5)*2 * P.wiggle * (1-P.rect) * damp;
-      if (P.rect > 0.001){
+      if (P.rect > 0.001 && mode !== 4){
         heading = lerpAngle(heading, snap90(heading), P.rect*0.38*Math.max(damp,0.5));
         if (mode === 0 && i % turnEvery === 0 && rng() < 0.85*P.rect)
           heading += (rng()<0.5?1:-1) * (Math.PI/2) * (0.9+rng()*0.2);
       }
-      /* gentle default avoidance so tubes don't graze mushily */
-      if (mode === 0 && near && near.d < gap*0.8 && cool === 0){
-        const away = Math.atan2(pos.y-near.q.y, pos.x-near.q.x);
-        heading = lerpAngle(heading, away, 0.15);
-      }
+      heading = prevH + clamp(angNorm(heading - prevH), -maxTurn, maxTurn);
       pos = {x: pos.x + Math.cos(heading)*step, y: pos.y + Math.sin(heading)*step};
       pts.push({x:pos.x, y:pos.y});
-      insertPt(pos, armId, i, heading);
-      /* branching */
+      insLog.push(insertPt(pos, armId, i, heading));
+      /* on-path blob: a local inflation of the line, placed live so
+         everything grown afterwards senses and respects it */
+      if (blobsLeft > 0 && depth === 0 && i > 15 && i < n-10 && rng() < 0.005){
+        const rb = wpx * lerp(1.0, 1.9, rng());
+        let fits = true;
+        for (let k=0; k<8 && fits; k++){
+          const th = k/8*TAU;
+          const nr2 = nearestTube({x:pos.x+Math.cos(th)*rb, y:pos.y+Math.sin(th)*rb}, armId, i, null);
+          if (nr2 && nr2.d < gap*0.75) fits = false;
+        }
+        if (fits){
+          blobSites.push({idx:i, r:rb});
+          blobsLeft--;
+          for (let k=0; k<8; k++){
+            const th = k/8*TAU;
+            insertPt({x:pos.x+Math.cos(th)*rb, y:pos.y+Math.sin(th)*rb}, armId, i, th+Math.PI/2);
+          }
+        }
+      }
       if (depth < 2 && i > n*0.30 && i < n*0.85 && rng() < (P.branchChance*1.6)/n){
         const side = rng()<0.5 ? -1 : 1;
         const childLen = (n-i)*step * lerp(0.5, 0.85, rng());
-        out.push.apply(out, grow(heading + side*lerp(0.55,1.15,rng()), depth+1, {x:pos.x,y:pos.y}, childLen));
+        out.push.apply(out, grow(heading + side*lerp(0.95,1.45,rng()), depth+1,
+          {x:pos.x,y:pos.y}, childLen, armId, i));
       }
     }
-    /* tip variant */
     let bulb = 0;
+    retract(); /* budget can expire mid-crossing; every ending deserves clearance */
     const tr = rng();
     const doCurl = tr < P.curlChance;
     const doHook = !doCurl && tr < P.curlChance + P.hookChance;
@@ -348,35 +544,103 @@ function buildSquig(S){
       const sign = rng()<0.5 ? -1 : 1;
       const turns = doHook ? lerp(0.28,0.48,rng()) : P.curlTurns*(0.7+rng()*0.6);
       const total = turns * TAU;
-      const rMul = doHook ? 4.0 : 3.0;
-      let k = 0, cs = step, h = heading;
+      const rEnd = 1.15*wpx;
+      const rStart = rEnd + turns*1.5*wpx;
+      /* dry-run the curl first: a curl glued into congestion is mush */
+      let k = 0, h = heading, tp = {x:pos.x, y:pos.y}, fits = true;
+      const trial = [];
       while (k < total){
-        const prog = k/total;
-        const inc = clamp(cs / Math.max(cs*1.2, (rMul - prog*1.85) * wpx), 0.06, 0.55);
-        h += sign*inc; k += inc; cs *= 0.997;
-        pos = {x: pos.x + Math.cos(h)*cs, y: pos.y + Math.sin(h)*cs};
-        pts.push({x:pos.x, y:pos.y});
+        const r = lerp(rStart, rEnd, k/total);
+        const cs = clamp(r*0.13, step, step*3);
+        const inc = cs / r;
+        h += sign*inc; k += inc;
+        tp = {x: tp.x + Math.cos(h)*cs, y: tp.y + Math.sin(h)*cs};
+        if (Math.hypot(tp.x-cx, tp.y-cy) > regionRad(Math.atan2(tp.y-cy, tp.x-cx)) + wpx*2){ fits = false; break; }
+        const nr = nearestTube(tp, armId, pts.length-1+trial.length+2, null);
+        if (nr && nr.d < gap*0.8){ fits = false; break; }
+        trial.push({x:tp.x, y:tp.y, h:h});
+      }
+      if (fits){
+        for (const t of trial){
+          pos = {x:t.x, y:t.y};
+          pts.push({x:t.x, y:t.y});
+          insertPt(pos, armId, pts.length-1, t.h);
+        }
+      } else {
+        bulb = wpx * lerp(0.85, 1.35, rng()); /* try a bulb instead */
       }
     } else if (doBulb){
       bulb = wpx * lerp(0.85, 1.35, rng());
     }
-    out.unshift({pts:pts, bulb:bulb, tipDir:heading});
+    if (bulb){
+      /* bulbs need room too */
+      const bc = {x: pos.x + Math.cos(heading)*bulb*0.55, y: pos.y + Math.sin(heading)*bulb*0.55};
+      let bFits = true;
+      for (let k=0; k<8; k++){
+        const th = k/8*TAU;
+        const bp = {x: bc.x + Math.cos(th)*bulb, y: bc.y + Math.sin(th)*bulb};
+        const nr = nearestTube(bp, armId, pts.length+9, null);
+        if (nr && nr.d < gap*0.7){ bFits = false; break; }
+      }
+      if (bFits){
+        for (let k=0; k<8; k++){
+          const th = k/8*TAU;
+          insertPt({x: bc.x + Math.cos(th)*bulb, y: bc.y + Math.sin(th)*bulb},
+                   armId, pts.length+9, th + Math.PI/2);
+        }
+      } else bulb = 0; /* plain round cap */
+    }
+    out.unshift({pts:pts, bulb:bulb, blobs:blobSites, wid:armId});
     return out;
   }
 
-  /* grow one wedge, copy around */
   const baseCount = Math.max(1, Math.ceil(P.arms / symN));
   const wedge = TAU / symN;
+  /* strands seed as wandering paths: the first into open space, the rest
+     alongside existing ink at the standard gap (they enter already
+     following) — nothing radiates from a hub anymore */
+  const spawnSpot = (k) => {
+    for (let t=0; t<16; t++){
+      let px, py, h;
+      if (k > 0 && allBase.length > 30 && rng() < 0.85){
+        const q = allBase[(rng()*allBase.length)|0];
+        const side = rng() < 0.5 ? 1 : -1;
+        px = q.x + Math.cos(q.t + side*Math.PI/2)*gap;
+        py = q.y + Math.sin(q.t + side*Math.PI/2)*gap;
+        h = q.t + (rng() < 0.5 ? 0 : Math.PI);
+      } else {
+        const th = -Math.PI/2 + rng()*wedge;
+        const rr = Math.sqrt(rng()) * regionRad(th)*0.7;
+        px = cx + Math.cos(th)*rr; py = cy + Math.sin(th)*rr;
+        h = rng()*TAU;
+      }
+      if (Math.hypot(px-cx, py-cy) > regionRad(Math.atan2(py-cy, px-cx))*0.92) continue;
+      const nr = nearestTube({x:px, y:py}, -1, 0, null);
+      if (nr && nr.d < gap*0.95) continue;
+      return {pos:{x:px, y:py}, h:h};
+    }
+    return null;
+  };
+  /* coverage-driven spawning: strands that die early get replaced until
+     the path budget is actually placed on paper (deferred B4 mechanism) */
   const wedgeArms = [];
-  for (let i=0; i<baseCount; i++){
-    const a0 = -Math.PI/2 + (i + 0.5)/baseCount * wedge + (rng()-0.5)*0.4;
-    wedgeArms.push.apply(wedgeArms, grow(a0, 0, null, null));
+  const targetSteps = Math.round(baseCount * armLenPx / step);
+  let placedSteps = 0, attempts = 0;
+  while (placedSteps < targetSteps && attempts < baseCount*3 + 6){
+    const sp = spawnSpot(attempts++);
+    if (!sp) break;
+    const grown = grow(sp.h, 0, sp.pos, null, null, null);
+    wedgeArms.push.apply(wedgeArms, grown);
+    for (const g of grown) placedSteps += g.pts.length;
   }
+  const widToPos = new Map();
+  wedgeArms.forEach((a,k) => widToPos.set(a.wid, k));
 
-  let arms = [];
+  const arms = [];
+  const allRelations = [];
   for (let c=0; c<symN; c++){
     const rot = c*wedge, cosr = Math.cos(rot), sinr = Math.sin(rot);
-    const jitterAmp = (1-P.symStr) * S * 0.05;
+    const jitterAmp = Math.min((1-P.symStr) * S * 0.05, gapEdge*0.10); /* must never close resolver-floor clearance */
     const jn = makeNoise(mulberry32(seed*31 + c*7 + 5));
     for (const a of wedgeArms){
       const pts = a.pts.map((p,idx) => {
@@ -388,206 +652,227 @@ function buildSquig(S){
         }
         return {x:x, y:y};
       });
-      arms.push({pts:pts, bulb:a.bulb, tipDir:a.tipDir + rot});
+      arms.push({pts:pts, bulb:a.bulb, blobs:a.blobs});
+    }
+    for (const r of relations){
+      allRelations.push({
+        parent: c*wedgeArms.length + widToPos.get(r.parent),
+        child:  c*wedgeArms.length + widToPos.get(r.child),
+        pIdx: r.pIdx
+      });
     }
   }
 
-  /* hand wobble */
-  const wobAmp = P.wobble * S * 0.012;
+  const wobAmp = Math.min(P.wobble * S * 0.010, gapEdge*0.28);
   arms.forEach((a,ai) => {
     const wn = makeNoise(mulberry32(seed*97 + ai*13 + 2));
     a.pts = a.pts.map((p,i) => ({
-      x: p.x + (wn(i*0.07)-0.5)*2*wobAmp,
-      y: p.y + (wn(i*0.07+555)-0.5)*2*wobAmp
+      x: p.x + (wn(i*0.06)-0.5)*2*wobAmp,
+      y: p.y + (wn(i*0.06+555)-0.5)*2*wobAmp
     }));
   });
 
-  /* pass-1 depth order */
-  arms.forEach(a => a.depth = rng());
-  arms.sort((a,b) => a.depth - b.depth);
-
-  /* ---------- crossings on final geometry ---------- */
-  const hw0 = Math.ceil(wpx*1.6/step) + 2;
-  const minSelf = Math.ceil(wpx*3/step) + 4;
-  const c2 = Math.max(step*2.5, wpx*1.2);
-  const segHash = new Map();
-  const skey = (x,y) => ((x/c2)|0) + ':' + ((y/c2)|0);
-  arms.forEach((a,ai) => {
-    for (let i=0; i<a.pts.length-1; i++){
-      const mx = (a.pts[i].x + a.pts[i+1].x)/2, my = (a.pts[i].y + a.pts[i+1].y)/2;
-      const k = skey(mx,my);
-      let l = segHash.get(k);
-      if (!l){ l = []; segHash.set(k, l); }
-      l.push([ai, i]);
-    }
+  /* ---------- contact events ---------- */
+  /* ---------- crossings (exact geometry, no index bookkeeping) ---------- */
+  /* per-arm bulb centers (needed by the painter) */
+  arms.forEach(a => {
+    if (!a.bulb) return;
+    const n = a.pts.length-1;
+    const t = Math.atan2(a.pts[n].y-a.pts[Math.max(0,n-2)].y, a.pts[n].x-a.pts[Math.max(0,n-2)].x);
+    a.bulbC = {x: a.pts[n].x + Math.cos(t)*a.bulb*0.55, y: a.pts[n].y + Math.sin(t)*a.bulb*0.55};
   });
-  function segInt(p1,p2,p3,p4){
+
+  /* paint order: deepest branches first, so a child slides UNDER its parent
+     at the root and the joint merges with no events, no windows, no seams */
+  const depth = arms.map(() => 0);
+  for (let pass=0; pass<4; pass++)
+    for (const r of allRelations) depth[r.child] = depth[r.parent] + 1;
+  const order = arms.map((_,i) => i).sort((a,b) => depth[b] - depth[a]);
+  const paintPos = [];
+  order.forEach((ai,k) => paintPos[ai] = k);
+
+  const minSelf = Math.ceil(wpx*1.6/step) + 2;
+  const uK = Math.ceil(wpx*2.4/step) + 2;
+  const nearRoot = (ai,bi,i,j) => allRelations.some(r =>
+    (r.parent===ai && r.child===bi && j < uK*1.5 && Math.abs(i-r.pIdx) < uK*1.5) ||
+    (r.parent===bi && r.child===ai && i < uK*1.5 && Math.abs(j-r.pIdx) < uK*1.5));
+
+  const segX = (p1,p2,p3,p4) => {
     const d1x=p2.x-p1.x, d1y=p2.y-p1.y, d2x=p4.x-p3.x, d2y=p4.y-p3.y;
     const den = d1x*d2y - d1y*d2x;
-    if (Math.abs(den) < 1e-9) return null;
+    if (Math.abs(den) < 1e-12) return null;
     const t = ((p3.x-p1.x)*d2y - (p3.y-p1.y)*d2x)/den;
     const u = ((p3.x-p1.x)*d1y - (p3.y-p1.y)*d1x)/den;
-    if (t<0||t>1||u<0||u>1) return null;
-    return {ang: Math.abs(Math.sin(Math.atan2(d1y,d1x) - Math.atan2(d2y,d2x)))};
-  }
-  const raw = [];
-  for (const [k, list] of segHash){
-    const [cxk, cyk] = k.split(':').map(Number);
+    if (t<0 || t>1 || u<0 || u>1) return null;
+    return {x: p1.x + d1x*t, y: p1.y + d1y*t,
+            t1: Math.atan2(d1y,d1x), t2: Math.atan2(d2y,d2x)};
+  };
+  const gcell = wpx*2;
+  const gh = new Map();
+  const gk = (x,y) => ((x/gcell)|0) + ':' + ((y/gcell)|0);
+  arms.forEach((a,ai) => a.pts.forEach((p,i) => {
+    if (i >= a.pts.length-1) return;
+    const k = gk(p.x,p.y);
+    let l = gh.get(k); if (!l){ l = []; gh.set(k, l); }
+    l.push([ai,i]);
+  }));
+  const crossings = [];
+  const seen = new Set();
+  for (const [k, list] of gh){
+    const [kx, ky] = k.split(':').map(Number);
     for (const [ai, i] of list){
-      for (let dx=0; dx<=1; dx++) for (let dy=-1; dy<=1; dy++){
-        if (dx===0 && dy<0) continue;
-        const l2 = segHash.get((cxk+dx)+':'+(cyk+dy));
+      const A = arms[ai].pts;
+      for (let dx=-1; dx<=1; dx++) for (let dy=-1; dy<=1; dy++){
+        const l2 = gh.get((kx+dx)+':'+(ky+dy));
         if (!l2) continue;
         for (const [bi, j] of l2){
-          if (bi < ai) continue;
-          if (bi === ai && (j <= i + minSelf)) continue;
-          if (dx===0 && dy===0 && (bi===ai ? j<=i : bi===ai)) { /* same-cell dedupe below */ }
-          if (dx===0 && dy===0 && bi===ai && j<=i) continue;
-          if (dx===0 && dy===0 && bi<ai) continue;
-          const A = arms[ai].pts, B = arms[bi].pts;
-          const hit = segInt(A[i],A[i+1],B[j],B[j+1]);
-          if (hit) raw.push({a:ai, ia:i, b:bi, ib:j, ang:hit.ang});
+          if (bi < ai || (bi === ai && j <= i + minSelf)) continue;
+          const key = ai+'|'+i+'|'+bi+'|'+j;
+          if (seen.has(key)) continue;
+          const B = arms[bi].pts;
+          const hit = segX(A[i], A[i+1], B[j], B[j+1]);
+          if (!hit) continue;
+          seen.add(key);
+          if (nearRoot(ai,bi,i,j)) continue; /* root joints merge via paint order */
+          /* collapse duplicate detections of the same physical crossing */
+          if (crossings.some(c => c.a===ai && c.b===bi &&
+              Math.hypot(c.x-hit.x, c.y-hit.y) < wpx*0.8 &&
+              Math.abs(c.i-i) <= 3 && Math.abs(c.j-j) <= 3)) continue;
+          /* default over: the strand painted later; weave slider flips it */
+          let overB = (bi === ai) ? true : paintPos[bi] > paintPos[ai];
+          if (rng() < P.weave*0.5) overB = !overB;
+          const sinT = Math.abs(Math.sin(hit.t1 - hit.t2));
+          crossings.push({a:ai, i:i, b:bi, j:j, x:hit.x, y:hit.y,
+                          oArm: overB ? bi : ai, oIdx: overB ? j : i, sinT: sinT});
         }
       }
     }
   }
-  /* dedupe clustered hits */
-  raw.sort((p,q) => (p.a-q.a) || (p.b-q.b) || (p.ia-q.ia));
-  const crossings = [];
-  for (const r of raw){
-    let dup = false;
-    for (let k=crossings.length-1; k>=0; k--){
-      const c = crossings[k];
-      if (c.a !== r.a || c.b !== r.b) break;
-      if (Math.abs(c.ia-r.ia) < hw0*2 && Math.abs(c.ib-r.ib) < hw0*2){ dup = true; break; }
-    }
-    if (!dup) crossings.push(r);
-  }
-  /* choose winners -> redraw windows */
-  const winByArm = new Map();
-  function addWin(ai, center, hw){
-    const a = arms[ai];
-    const lo = Math.max(0, center-hw), hi = Math.min(a.pts.length-1, center+hw);
-    let l = winByArm.get(ai);
-    if (!l){ l = []; winByArm.set(ai, l); }
-    l.push([lo,hi]);
-  }
-  for (const c of crossings){
-    const hw = Math.min(hw0*3, Math.round(hw0/Math.max(0.34, c.ang)));
-    if (c.a === c.b){
-      addWin(c.a, rng()<0.5 ? c.ia : c.ib, hw);          /* self-cross: always resolve */
-    } else {
-      /* natural top = later-drawn (higher index). flip with prob weave*0.5 */
-      if (rng() < P.weave*0.5) addWin(c.a, c.ia, hw);    /* put the under arm on top */
-    }
-  }
-  /* merge intervals per arm, margin-extend to keep window ends clear of crossings */
-  const windows = [];
-  for (const [ai, list] of winByArm){
-    list.sort((p,q) => p[0]-q[0]);
-    const merged = [];
-    for (const iv of list){
-      const last = merged[merged.length-1];
-      if (last && iv[0] <= last[1] + hw0) last[1] = Math.max(last[1], iv[1]);
-      else merged.push([iv[0], iv[1]]);
-    }
-    const armXs = crossings.filter(c => c.a===ai || c.b===ai)
-      .flatMap(c => [c.a===ai ? c.ia : null, c.b===ai ? c.ib : null].filter(v => v!=null));
-    for (const iv of merged){
-      for (let pass=0; pass<3; pass++){
-        for (const x of armXs){
-          if (x < iv[0] && iv[0]-x < hw0) iv[0] = Math.max(0, x-hw0);
-          if (x > iv[1] && x-iv[1] < hw0) iv[1] = Math.min(arms[ai].pts.length-1, x+hw0);
-        }
-      }
-      windows.push({ai:ai, lo:iv[0], hi:iv[1], ord:rng()});
-    }
-  }
-  windows.sort((p,q) => p.ord - q.ord);
 
-  /* smooth irregular body: low harmonics only, never jagged */
-  const harm = [];
-  for (let k=1; k<=3; k++)
-    harm.push({a: lerp(0.02, 0.10 - k*0.022, rng()), p: rng()*TAU});
-
-  return {arms:arms, windows:windows, harm:harm, cx:cx, cy:cy, bodyR:bodyR, wpx:wpx, seed:seed};
+  return {arms:arms, order:order, crossings:crossings,
+          cx:cx, cy:cy, wpx:wpx, seed:seed};
 }
 
-/* ---------- render ---------- */
+/* ---------- render: painter\u2019s algorithm ----------
+   Occlusion is emergent from paint order, not computed from index windows.
+   Per strand: ink stroke then paper stroke (interleaved \u2014 NEVER two global
+   passes, which erases every outline underneath and unions everything).
+   Crossings: small clipped patches that locally redraw the over strand. */
 function paint(ctx, S){
   const m = buildSquig(S);
   const paper = '#faf7f0';
   const ink = val('in-ink');
-  const ow = Math.max(1.1, S*0.0032*P.outline);
+  const lw = Math.max(1.4, S*0.0042*P.outline);
+  const Wink = m.wpx + lw;
+  const Wpap = Math.max(0.5, m.wpx - lw);
+  const wpxLocal = m.wpx;
 
   ctx.fillStyle = paper;
   ctx.fillRect(0,0,S,S);
   ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
 
-  const trace = (pts, lo, hi) => {
+  const strokePath = (pts, w, color, lo, hi) => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = w;
     ctx.beginPath();
-    ctx.moveTo(pts[lo].x, pts[lo].y);
-    for (let i=lo+1; i<=hi; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    const a = lo != null ? lo : 0, b = hi != null ? hi : pts.length-1;
+    ctx.moveTo(pts[a].x, pts[a].y);
+    for (let i=a+1; i<=b; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.stroke();
   };
-  const bulbAt = a => {
-    if (!a.bulb) return;
-    const p = a.pts[a.pts.length-1];
-    const bx = p.x + Math.cos(a.tipDir)*a.bulb*0.45;
-    const by = p.y + Math.sin(a.tipDir)*a.bulb*0.45;
-    ctx.beginPath(); ctx.arc(bx, by, a.bulb + ow, 0, TAU);
-    ctx.fillStyle = ink; ctx.fill();
-    ctx.beginPath(); ctx.arc(bx, by, a.bulb - ow*0.15, 0, TAU);
-    ctx.fillStyle = paper; ctx.fill();
+  const fillCircle = (c, r, color) => {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, r, 0, TAU);
+    ctx.fill();
   };
 
-  /* pass 1: whole continuous arms, casing + core */
-  ctx.lineCap = 'round';
-  for (const a of m.arms){
-    const n = a.pts.length-1;
-    trace(a.pts, 0, n);
-    ctx.strokeStyle = ink; ctx.lineWidth = m.wpx + ow*2; ctx.stroke();
-    bulbAt(a);
-    trace(a.pts, 0, n);
-    ctx.strokeStyle = paper; ctx.lineWidth = m.wpx; ctx.stroke();
-    /* re-clear bulb interior over the core stroke seam */
-    if (a.bulb){
-      const p = a.pts[a.pts.length-1];
-      const bx = p.x + Math.cos(a.tipDir)*a.bulb*0.45;
-      const by = p.y + Math.sin(a.tipDir)*a.bulb*0.45;
-      ctx.beginPath(); ctx.arc(bx, by, a.bulb - ow*0.15, 0, TAU);
-      ctx.fillStyle = paper; ctx.fill();
-    }
-  }
-
-  /* pass 2: over/under windows — butt-cap ink, round-cap paper so seams vanish */
-  for (const w of m.windows){
-    const pts = m.arms[w.ai].pts;
-    trace(pts, w.lo, w.hi);
-    ctx.lineCap = 'butt';
-    ctx.strokeStyle = ink; ctx.lineWidth = m.wpx + ow*2; ctx.stroke();
-    trace(pts, w.lo, w.hi);
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = paper; ctx.lineWidth = m.wpx; ctx.stroke();
-  }
-
-  /* body: harmonic radius — smooth by construction */
   const solid = document.getElementById('in-solid').checked;
-  ctx.beginPath();
-  const N = 96;
-  for (let i=0; i<=N; i++){
-    const t = i/N*TAU;
-    let r = 1;
-    for (let k=0; k<m.harm.length; k++) r += m.harm[k].a * Math.cos((k+1)*t + m.harm[k].p);
-    const x = m.cx + Math.cos(t)*m.bodyR*r, y = m.cy + Math.sin(t)*m.bodyR*r;
-    if (i) ctx.lineTo(x,y); else ctx.moveTo(x,y);
+  const dotsOf = a => {
+    const d = [];
+    if (a.bulb) d.push({c:a.bulbC, r:a.bulb});
+    if (a.blobs) for (const b of a.blobs)
+      d.push({c:a.pts[Math.min(b.idx, a.pts.length-1)], r:b.r, idx:b.idx});
+    return d;
+  };
+  /* base pass: each strand paints ink+paper as a unit, deepest first */
+  for (const ai of m.order){
+    const a = m.arms[ai];
+    if (a.pts.length < 2) continue;
+    const dots = dotsOf(a);
+    strokePath(a.pts, Wink, ink);
+    for (const d of dots) fillCircle(d.c, d.r + lw/2, ink);
+    strokePath(a.pts, Wpap, paper);
+    for (const d of dots) fillCircle(d.c, Math.max(0.5, d.r - lw/2), solid ? ink : paper);
   }
-  ctx.closePath();
-  ctx.fillStyle = solid ? ink : paper;
-  ctx.fill();
-  ctx.strokeStyle = ink;
-  ctx.lineWidth = ow*2;
+
+  /* crossing pass: redraw the over strand locally with BUTT caps and no
+     clip. A butt end coincides exactly with the base-pass strand beneath
+     it, so cut ends are invisible seams by construction — no clip circle,
+     no cap containment, no radius floors to get wrong. */
+  ctx.lineCap = 'butt';
+  for (const c of m.crossings){
+    const a = m.arms[c.oArm];
+    const pts = a.pts;
+    const r = Math.min(m.wpx*3.2, (Wink*0.55)/Math.max(c.sinT, 0.28) + m.wpx*0.6);
+    const need = r + Wink;
+    /* for self-crossings the walk must never enter the under branch of the
+       same polyline, or the patch repaints the outline it exists to erase */
+    const selfX = c.a === c.b;
+    const uIdx = (c.oIdx === c.j && c.oArm === c.b) ? c.i : c.j;
+    const loMin = (selfX && c.oIdx > uIdx) ? uIdx + 2 : 0;
+    const hiMax = (selfX && c.oIdx < uIdx) ? uIdx - 1 : pts.length-1;
+    let lo = c.oIdx, hi = Math.min(hiMax, c.oIdx+1);
+    let accLo = 0, accHi = 0;
+    while (lo > loMin && accLo < need){
+      accLo += Math.hypot(pts[lo].x-pts[lo-1].x, pts[lo].y-pts[lo-1].y); lo--;
+    }
+    while (hi < hiMax && accHi < need){
+      accHi += Math.hypot(pts[hi+1].x-pts[hi].x, pts[hi+1].y-pts[hi].y); hi++;
+    }
+    /* replay the exact base-pass order locally; any dot (tip bulb or
+       on-path blob) inside the sub-path must be replayed too, or the tube's
+       outline reappears inside it */
+    const dots = dotsOf(a).filter(d =>
+      (d.idx == null && hi >= pts.length-2) || (d.idx != null && d.idx >= lo && d.idx <= hi));
+    strokePath(pts, Wink, ink, lo, hi);
+    for (const d of dots) fillCircle(d.c, d.r + lw/2, ink);
+    strokePath(pts, Wpap, paper, lo, hi);
+    for (const d of dots) fillCircle(d.c, Math.max(0.5, d.r - lw/2), solid ? ink : paper);
+  }
+  /* core re-assert: nearby patches can clobber each other's zones
+     (last-writer-wins). Re-applying each crossing inside a tight clip
+     around just its core makes conflicts require overlapping CORES,
+     which the model's spacing rules don't produce. */
+  for (const c of m.crossings){
+    const a = m.arms[c.oArm];
+    const pts = a.pts;
+    const rCore = (Wink*0.5)/Math.max(c.sinT, 0.5) + lw*1.5;
+    const need = rCore + Wink;
+    const selfX = c.a === c.b;
+    const uIdx = (c.oIdx === c.j && c.oArm === c.b) ? c.i : c.j;
+    const loMin = (selfX && c.oIdx > uIdx) ? uIdx + 2 : 0;
+    const hiMax = (selfX && c.oIdx < uIdx) ? uIdx - 1 : pts.length-1;
+    let lo = c.oIdx, hi = Math.min(hiMax, c.oIdx+1);
+    let acc = 0;
+    while (lo > loMin && acc < need){
+      acc += Math.hypot(pts[lo].x-pts[lo-1].x, pts[lo].y-pts[lo-1].y); lo--;
+    }
+    acc = 0;
+    while (hi < hiMax && acc < need){
+      acc += Math.hypot(pts[hi+1].x-pts[hi].x, pts[hi+1].y-pts[hi].y); hi++;
+    }
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, rCore, 0, TAU);
+    ctx.clip();
+    strokePath(pts, Wink, ink, lo, hi);
+    strokePath(pts, Wpap, paper, lo, hi);
+    ctx.restore();
+  }
   ctx.lineCap = 'round';
-  ctx.stroke();
+
 }
 
 /* ---------- wiring ---------- */
@@ -611,25 +896,26 @@ function surprise(){
     document.getElementById('in-'+k).value = v;
     document.getElementById('out-'+k).textContent = fmt(v);
   };
-  set('arms', 2+Math.floor(R()*8));
-  set('armLen', +lerp(0.22,0.8,R()).toFixed(2));
+  set('arms', 2+Math.floor(R()*7));
+  set('blobs', +(R()*0.9).toFixed(2));
+  set('armLen', +lerp(0.6,2.0,R()).toFixed(2));
   set('lenVar', +(R()*0.7).toFixed(2));
   set('armW', +lerp(0.01,0.045,R()).toFixed(3));
   set('compact', +R().toFixed(2));
   set('rect', +((R()<0.45 ? R() : R()*0.25)).toFixed(2));
   set('turnFreq', +R().toFixed(2));
   set('wiggle', +lerp(0.08,0.42,R()).toFixed(2));
-  set('follow', +R().toFixed(2));
+  set('follow', +lerp(0.5,1,R()).toFixed(2));
   set('cross', +R().toFixed(2));
   set('curlChance', +(R()*0.7).toFixed(2));
-  set('curlTurns', +lerp(0.5,2.2,R()).toFixed(2));
+  set('curlTurns', +lerp(0.5,1.5,R()).toFixed(2));
   set('hookChance', +(R()*0.5).toFixed(2));
   set('bulbChance', +(R()*0.4).toFixed(2));
   set('branchChance', +(R()*0.7).toFixed(2));
   set('symStr', +lerp(0.5,1,R()).toFixed(2));
   set('wobble', +lerp(0.2,0.8,R()).toFixed(2));
   set('weave', +lerp(0.3,1,R()).toFixed(2));
-  document.getElementById('in-symN').value = R()<0.55 ? '1' : String(2+Math.floor(R()*5));
+  document.getElementById('in-symN').value = R()<0.9 ? '1' : String(2+Math.floor(R()*5)); /* symmetry is a rare treat: nothing on the reference page is symmetric */
   reseed();
 }
 function savePng(){

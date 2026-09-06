@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Squig Lab — Orb Studies</title><style>
+  :root{
+    --paper:#faf7f0;
+    --paper-deep:#f2eee4;
+    --ink:#1c1b18;
+    --pink:#ef5f9f;
+    --rule:#dcd6c8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--paper-deep);
+    color:var(--ink);
+    font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    font-size:12px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1060px;margin:0 auto;padding:20px 16px 48px}
+  header{display:flex;align-items:baseline;gap:14px;border-bottom:2px solid var(--ink);padding-bottom:10px;margin-bottom:18px;flex-wrap:wrap}
+  h1{font-size:22px;letter-spacing:.18em;font-weight:700}
+  .eyebrow{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#6f6a5c}
+  main{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start}
+  @media(max-width:820px){main{grid-template-columns:1fr}}
+  .stage{
+    background:var(--paper);
+    border:1.5px solid var(--ink);
+    border-radius:6px;
+    box-shadow:4px 4px 0 rgba(28,27,24,.12);
+    padding:10px;
+    position:sticky;top:12px;
+  }
+  @media(max-width:820px){.stage{position:static}}
+  canvas{display:block;width:100%;height:auto;border-radius:3px;cursor:pointer}
+  .stage-foot{display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:8px;flex-wrap:wrap}
+  .stage-foot .hint{color:#8a8474;font-size:10px;letter-spacing:.06em}
+  .panel{display:flex;flex-direction:column;gap:14px}
+  .group{background:var(--paper);border:1.5px solid var(--ink);border-radius:6px;padding:12px 12px 6px}
+  .group h2{font-size:10px;letter-spacing:.16em;text-transform:uppercase;border-bottom:1px solid var(--rule);padding-bottom:6px;margin-bottom:8px}
+  .row{display:grid;grid-template-columns:1fr 44px;gap:8px;align-items:center;margin-bottom:9px}
+  .row label{display:block;font-size:11px;letter-spacing:.04em;margin-bottom:3px;color:#43403a}
+  .row output{font-size:11px;text-align:right;color:#6f6a5c;font-variant-numeric:tabular-nums}
+  input[type=range]{width:100%;appearance:none;-webkit-appearance:none;height:20px;background:transparent;cursor:pointer}
+  input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--ink);border-radius:1px}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--paper);border:2.5px solid var(--ink);margin-top:-6px}
+  input[type=range]:focus-visible::-webkit-slider-thumb{border-color:var(--pink);outline:2px solid var(--pink);outline-offset:2px}
+  input[type=range]::-moz-range-track{height:2px;background:var(--ink)}
+  input[type=range]::-moz-range-thumb{width:11px;height:11px;border-radius:50%;background:var(--paper);border:2.5px solid var(--ink)}
+  select,input[type=number]{
+    font-family:inherit;font-size:12px;background:var(--paper);color:var(--ink);
+    border:1.5px solid var(--ink);border-radius:4px;padding:4px 6px;width:100%;
+  }
+  .inline{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:9px}
+  .sel-label{font-size:11px;color:#43403a;display:block;margin-bottom:3px}
+  .check{display:flex;align-items:center;gap:8px;margin:2px 0 9px;font-size:11px;color:#43403a;cursor:pointer}
+  .check input{width:14px;height:14px;accent-color:var(--ink);cursor:pointer}
+  button{
+    font-family:inherit;font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+    background:var(--ink);color:var(--paper);border:1.5px solid var(--ink);
+    border-radius:4px;padding:8px 12px;cursor:pointer;
+  }
+  button.ghost{background:var(--paper);color:var(--ink)}
+  button:hover{transform:translate(-1px,-1px);box-shadow:2px 2px 0 rgba(28,27,24,.25)}
+  button:active{transform:none;box-shadow:none}
+  button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
+  @media(prefers-reduced-motion:reduce){button:hover{transform:none;box-shadow:none}}
+  .btnrow{display:flex;gap:8px;flex-wrap:wrap}
+  .seedrow{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;margin-bottom:9px}
+
+  :root{--paper:#faf8f2;--paper-deep:#f1eee6;--ink:#23221e}
+  .wrap{max-width:1200px;padding-top:26px}
+  main{grid-template-columns:minmax(0,1fr) 302px;gap:22px}
+  .stage{padding:12px;border-radius:8px;box-shadow:4px 4px 0 #23221e13}
+  #drawing{width:100%;aspect-ratio:1;cursor:pointer;border-radius:4px;overflow:hidden}
+  #drawing svg{width:100%;height:100%;display:block}
+  #drawing:focus-visible{outline:2px solid var(--pink);outline-offset:3px}
+  .stage-foot{border-top:1px solid var(--rule);padding:12px 3px 2px;margin-top:3px}
+  .stage-foot .btnrow{gap:6px}
+  .specimen{display:flex;align-items:center;justify-content:space-between;padding:3px 4px 10px;color:#797366;font-size:10px;letter-spacing:.1em;text-transform:uppercase}
+  .caption{color:#787264;line-height:1.7;font-size:11px;margin:13px 3px 0;max-width:65ch}
+  .group{padding:13px 14px 5px}
+  .group h2{margin-bottom:12px}
+  .panel{gap:12px}
+  .group select{margin-bottom:12px}
+  .small{font-size:10px;line-height:1.6;color:#817969;margin:-3px 0 12px}
+  .seedrow{grid-template-columns:1fr 40px}
+  .seedrow button{font-size:18px;padding:1px 5px;letter-spacing:0}
+  .seedrow input{min-width:0;font-variant-numeric:tabular-nums}
+  button{letter-spacing:.06em;padding:8px 10px}
+  button:disabled{opacity:.4;cursor:default;transform:none;box-shadow:none}
+  .exports{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+  .exports button{flex:1}
+  .quiet{color:#787264;font-size:10px;line-height:1.6}
+  details summary{cursor:pointer;font-size:10px;letter-spacing:.12em;text-transform:uppercase;padding-bottom:10px}
+  details[open] summary{border-bottom:1px solid var(--rule);margin-bottom:12px}
+  #status{min-height:16px;color:#787264;font-size:10px;margin-top:8px;line-height:1.5}
+  @media(max-width:820px){main{grid-template-columns:1fr}.wrap{max-width:660px}.panel{display:grid;grid-template-columns:1fr 1fr;align-items:start}.stage{position:static}}
+  @media(max-width:460px){.panel{grid-template-columns:1fr}.eyebrow{font-size:9px}header{gap:7px}.stage-foot{align-items:flex-start}.stage-foot .btnrow{width:100%}.stage-foot button{flex:1}}
+
+  .project-nav{display:flex;flex-wrap:wrap;gap:8px 18px;margin:0 0 16px;font-size:14px;line-height:1.5}
+  .project-nav a{color:var(--ink);text-underline-offset:3px}
+  .project-nav a[aria-current=page]{font-weight:700}
+  .project-nav a:focus-visible{outline:2px solid currentColor;outline-offset:4px}
+</style></head>
+<body><div class="wrap">
+<nav class="project-nav" aria-label="Project navigation"><a href="../">&larr; All projects</a><a href="./">Orbless</a><a href="orb-studies.html" aria-current="page">Orb studies</a></nav>
+<header><h1>SQUIG&nbsp;LAB</h1><span class="eyebrow">orb studies &middot; loose lines, little knots</span></header>
+<main><div class="drawing-column"><div class="stage">
+<div class="specimen"><span id="specimen-label">Study 00042</span><span id="family-label">Looped knot</span></div>
+<div id="drawing" role="button" tabindex="0" aria-label="Generated squig. Click or press Enter to draw another."></div>
+<div class="stage-foot"><span class="hint">click the paper to turn the page</span><div class="btnrow"><button id="btnBack" class="ghost" disabled>Previous</button><button id="btnNew">New squig</button><button id="btnWild" class="ghost">Surprise me</button></div></div>
+</div><p class="caption">A little orb, a long wandering arm, a curl that doubles back. Each study leaves some paper quiet and lets a few lines get tangled.</p></div>
+<div class="panel">
+<section class="group" id="g-composition"><h2>Composition</h2>
+<label class="sel-label" for="family">Drawing family</label><select id="family"><option value="mixed">Reference mix</option><option value="open">Open &amp; loose</option><option value="knotted">Looped knot</option><option value="curl">Hook &amp; curl</option></select>
+<p class="small">Reference mix moves between all three families.</p><div id="composition-controls"></div></section>
+<section class="group" id="g-line"><h2>Line &amp; orb</h2><div id="line-controls"></div>
+<div class="inline"><div><label class="sel-label" for="ink">Ink</label><select id="ink"><option value="#23221e">Soft black</option><option value="#d54f87">Rose</option><option value="#365b47">Forest</option><option value="#385b82">Blue</option></select></div><div><label class="sel-label" for="solid">Orb fill</label><select id="solid"><option value="false">Paper</option><option value="true">Ink</option></select></div></div></section>
+<details class="group" id="g-character"><summary>Gesture details</summary><div id="character-controls"></div></details>
+<section class="group"><h2>Keep a study</h2><label class="sel-label" for="seed">Seed</label><div class="seedrow"><input type="number" id="seed" value="42" min="0" max="4294967295" step="1" aria-label="Seed"><button class="ghost" id="btnReroll" aria-label="Random seed" title="Random seed">&#9860;</button></div>
+<div class="exports"><button class="ghost" id="btnPng">Save PNG</button><button class="ghost" id="btnSvg">Save SVG</button></div><div class="exports"><button class="ghost" id="btnReset">Reset to first study</button></div><p id="status" role="status" aria-live="polite">PNG at 2400 × 2400 · SVG at any size</p></section>
+</div></main></div>
+<script>
+/* Squig Lab — gesture edition. Geometry is normalized; exports and previews
+   use exactly the same drawing. No dependencies, network calls, or storage. */
+const Squig = (() => {
+  const TAU = Math.PI * 2;
+  const defaults = {family:'mixed', arms:4, reach:1, loop:0.68, curl:0.72,
+    thickness:0.039, orb:0.100, variation:0.48, hand:0.45, outline:0.0050,
+    weave:0.8, branches:0.3, ink:'#23221e', solid:false};
+  const mix=(a,b,t)=>a+(b-a)*t;
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+  function random(seed){return ()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296;};}
+  function noise(rng){const a=Array.from({length:256},rng);return x=>{const i=Math.floor(x),f=x-i,u=f*f*(3-2*f);return mix(a[((i%256)+256)%256],a[(((i+1)%256)+256)%256],u)*2-1;};}
+  function smooth(anchors){
+    const out=[];
+    for(let i=0;i<anchors.length-1;i++){
+      const p0=anchors[Math.max(0,i-1)],p1=anchors[i],p2=anchors[i+1],p3=anchors[Math.min(anchors.length-1,i+2)];
+      // Centripetal-distance weighted tangents prevent corners and overshoot
+      // when a short curl follows a long, open reach.
+      const d01=Math.sqrt(dist(p0,p1))||0.001,d12=Math.sqrt(dist(p1,p2))||0.001,d23=Math.sqrt(dist(p2,p3))||0.001;
+      const t1={x:(p2.x-p0.x)*d12/(d01+d12),y:(p2.y-p0.y)*d12/(d01+d12)};
+      const t2={x:(p3.x-p1.x)*d12/(d12+d23),y:(p3.y-p1.y)*d12/(d12+d23)};
+      const steps=Math.max(8,Math.ceil(dist(p1,p2)/0.003));
+      for(let k=0;k<steps;k++){
+        const t=k/steps,t2v=t*t,t3=t2v*t;
+        const a=2*t3-3*t2v+1,b=t3-2*t2v+t,c=-2*t3+3*t2v,d=t3-t2v;
+        out.push({x:a*p1.x+b*t1.x+c*p2.x+d*t2.x,y:a*p1.y+b*t1.y+c*p2.y+d*t2.y});
+      }
+    }
+    out.push({...anchors.at(-1)});return out;
+  }
+  const point=(x,y)=>({x,y});
+  // These are gesture vocabularies, not traced reference contours. Parameters
+  // change their proportions, curvature, position and ending independently.
+  function hook(rng,p){
+    const bend=mix(-0.06,0.06,rng()),reach=p.reach*mix(0.86,1.06,rng());
+    return [[0,0],[-.11,-.085],[-.09+bend,-.205],[-.16,-.30],[-.285,-.285],[-.345,-.355],[-.305,-.435]]
+      .map(([x,y])=>point(x*reach,y*reach));
+  }
+  function sweep(rng,p){
+    const h=mix(-.035,.05,rng()),reach=p.reach*mix(.84,1.06,rng());
+    return [[0,0],[.15,.055+h],[.265,.01+h],[.405,.055],[.485,.01],[.455,-.095]]
+      .map(([x,y])=>point(x*reach,y*reach));
+  }
+  function loop(rng,p){
+    const rx=mix(.175,.235,rng())*mix(.8,1.16,p.loop),ry=mix(.22,.30,rng())*mix(.86,1.12,p.loop);
+    const cx=mix(.07,.125,rng()),cy=ry*.73;
+    const start=-Math.PI/2-.24,end=start+TAU*mix(.83,1.20,p.curl);
+    const pts=[point(0,0)];
+    for(let k=0;k<=16;k++){
+      const t=k/16,a=mix(start,end,t),r=1-.69*t;
+      pts.push(point(cx+Math.cos(a)*rx*r,cy+Math.sin(a)*ry*r));
+    }
+    return pts;
+  }
+  function curl(rng,p){
+    const pts=[point(0,0),point(-.135,.065),point(-.20,.16)];
+    const cx=-.25,cy=.285,rx=mix(.092,.128,rng()),ry=rx*mix(.90,1.23,rng());
+    const start=-.30,end=start+TAU*mix(.77,1.13,p.curl);
+    for(let k=0;k<=15;k++){
+      const t=k/15,a=mix(start,end,t),r=1-.70*t;
+      pts.push(point(cx+Math.cos(a)*rx*r,cy+Math.sin(a)*ry*r));
+    }
+    return pts;
+  }
+  function crossbar(rng,p){
+    const rise=mix(-.03,.025,rng());
+    return [[0,0],[-.06,.16],[-.015,.275],[.16,.30+rise],[.295,.235],[.38,.18]]
+      .map(([x,y])=>point(x,y));
+  }
+  function smallReach(rng,p){
+    return [[0,0],[-.13,.08],[-.24,.12],[-.39,.095],[-.43,.16]]
+      .map(([x,y])=>point(x*p.reach*.94,y));
+  }
+  function transform(pts,angle,sx,sy,warp,n){
+    const co=Math.cos(angle),si=Math.sin(angle);
+    return pts.map(q=>{
+      const x=q.x*sx+Math.sin(q.y*9+n)*warp*q.y;
+      const y=q.y*sy+Math.sin(q.x*8-n)*warp*q.x;
+      return point(co*x-si*y,si*x+co*y);
+    });
+  }
+  function decorate(pts,width,p,rng){
+    const nw=noise(rng),nx=noise(rng),phase=rng()*70;
+    let arc=0; const lengths=[0];
+    for(let i=1;i<pts.length;i++){arc+=dist(pts[i],pts[i-1]);lengths.push(arc);}
+    const decorated=pts.map((q,i)=>{
+      const a=pts[Math.max(0,i-3)],b=pts[Math.min(pts.length-1,i+3)],d=dist(a,b)||1;
+      const nxv=-(b.y-a.y)/d,nyv=(b.x-a.x)/d,s=lengths[i];
+      const jig=p.hand*(.0019*nx(s*24+phase)+.00055*nx(s*88+phase));
+      return {x:q.x+nxv*jig,y:q.y+nyv*jig,w:width*(1+p.variation*.18*nw(s*5+phase)+p.hand*.035*nw(s*23+phase)),s};
+    });
+    // Keep both sides of the tube round at tight bends, even when a user
+    // combines very short reaches with the widest pen. Blend the taper over
+    // neighboring samples so it feels like a change of pressure.
+    const limits=pts.map((q,i)=>{
+      const a=pts[Math.max(0,i-5)],b=pts[Math.min(pts.length-1,i+5)];
+      const area=Math.abs((q.x-a.x)*(b.y-a.y)-(q.y-a.y)*(b.x-a.x));
+      const radius=area>1e-10?dist(a,q)*dist(q,b)*dist(a,b)/(2*area):1;
+      return Math.min(decorated[i].w,radius*1.55);
+    });
+    for(let i=1;i<limits.length;i++)limits[i]=Math.min(limits[i],limits[i-1]+dist(pts[i],pts[i-1])*.18);
+    for(let i=limits.length-2;i>=0;i--)limits[i]=Math.min(limits[i],limits[i+1]+dist(pts[i],pts[i+1])*.18);
+    decorated.forEach((q,i)=>q.w=Math.max(width*.28,limits[i]));
+    return decorated;
+  }
+  function intersection(a,b,c,d){
+    const x=b.x-a.x,y=b.y-a.y,u=d.x-c.x,v=d.y-c.y,det=x*v-y*u;
+    if(Math.abs(det)<1e-10)return null;
+    const t=((c.x-a.x)*v-(c.y-a.y)*u)/det,q=((c.x-a.x)*y-(c.y-a.y)*x)/det;
+    if(t<0||t>=1||q<0||q>=1)return null;
+    return {x:a.x+t*x,y:a.y+t*y,t,q,sin:Math.abs(det)/(Math.hypot(x,y)*Math.hypot(u,v))};
+  }
+  function crossingList(strands,orb){
+    if(strands.length>8)return indexedCrossings(strands,orb);
+    const xs=[];
+    for(let a=0;a<strands.length;a++)for(let b=a+1;b<strands.length;b++){
+      if(strands[a].parent!==undefined||strands[b].parent!==undefined)continue;
+      const A=strands[a].pts,B=strands[b].pts;
+      for(let i=0;i<A.length-1;i+=2)for(let j=0;j<B.length-1;j+=2){
+        const ai=Math.min(i+2,A.length-1),bj=Math.min(j+2,B.length-1);
+        const hit=intersection(A[i],A[ai],B[j],B[bj]);
+        if(!hit||Math.hypot(hit.x,hit.y)<orb*1.12||hit.sin<.20)continue;
+        if(xs.some(q=>q.a===a&&q.b===b&&dist(q,hit)<.025))continue;
+        xs.push({...hit,a,b,i,j});
+      }
+    }
+    return xs;
+  }
+  // At high arm counts, only compare segments sharing a small region of
+  // paper. This avoids checking every segment against every other segment.
+  function indexedCrossings(strands,orb){
+    const cell=.045,grid=new Map(),xs=[],pairs=new Map();let serial=0;
+    const cells=(a,b)=>{
+      const keys=[];
+      for(let x=Math.floor(Math.min(a.x,b.x)/cell);x<=Math.floor(Math.max(a.x,b.x)/cell);x++)
+        for(let y=Math.floor(Math.min(a.y,b.y)/cell);y<=Math.floor(Math.max(a.y,b.y)/cell);y++)keys.push(x+':'+y);
+      return keys;
+    };
+    strands.forEach((strand,b)=>{
+      if(strand.parent!==undefined)return;
+      const B=strand.pts,pending=[];
+      for(let j=0;j<B.length-1;j+=2){
+        const end=B[Math.min(j+2,B.length-1)],start=B[j];
+        if(Math.hypot(start.x,start.y)<orb*1.12&&Math.hypot(end.x,end.y)<orb*1.12)continue;
+        const keys=cells(start,end),seen=new Set();
+        for(const key of keys)for(const seg of grid.get(key)||[]){
+          if(seen.has(seg.id))continue;seen.add(seg.id);
+          const hit=intersection(seg.start,seg.end,start,end);
+          if(!hit||Math.hypot(hit.x,hit.y)<orb*1.12||hit.sin<.20)continue;
+          const pairKey=seg.arm+':'+b,found=pairs.get(pairKey)||[];
+          if(found.some(q=>dist(q,hit)<.025))continue;
+          const crossing={...hit,a:seg.arm,b,i:seg.index,j};
+          found.push(crossing);pairs.set(pairKey,found);xs.push(crossing);
+        }
+        pending.push({id:serial++,arm:b,index:j,start,end,keys});
+      }
+      for(const seg of pending)for(const key of seg.keys){
+        if(!grid.has(key))grid.set(key,[]);grid.get(key).push(seg);
+      }
+    });
+    return xs.sort((a,b)=>a.a-b.a||a.b-b.b||a.i-b.i||a.j-b.j);
+  }
+  function scoreCandidate(pts,others,width,orb){
+    let penalty=0;
+    const tip=pts.at(-1);
+    for(const strand of others){
+      const op=strand.pts;
+      for(let i=8;i<pts.length;i+=5){
+        const q=pts[i];if(Math.hypot(q.x,q.y)<orb*1.12)continue;
+        let near=1,parallel=0;
+        for(let j=4;j<op.length-4;j+=5){
+          const d=dist(q,op[j]);if(d<near){
+            near=d;
+            const a=pts[i-2],b=pts[Math.min(i+2,pts.length-1)],c=op[j-2],e=op[j+2];
+            parallel=Math.abs(((b.x-a.x)*(e.x-c.x)+(b.y-a.y)*(e.y-c.y))/((dist(a,b)*dist(c,e))||1));
+          }
+        }
+        // Crossing at an angle is welcome; long almost-tangent collisions
+        // erase the white channels and are penalized much more strongly.
+        if(near<width*1.65&&parallel>.85)penalty+=(width*1.65-near)*35;
+      }
+      const tipDist=Math.min(...op.filter((_,i)=>i%4===0).map(q=>dist(q,tip)));
+      if(tipDist<width*1.7)penalty+=(width*1.7-tipDist)*150;
+    }
+    return penalty;
+  }
+  function build(seed,settings={}){
+    const p={...defaults,...settings},rng=random(Number(seed)||0);
+    const choice=rng();
+    const family=p.family==='mixed'?(choice<.25?'open':choice<.75?'knotted':'curl'):p.family;
+    const angle=mix(-Math.PI,Math.PI,rng());
+    const mirror=rng()<.5?-1:1;
+    const sx=mirror*mix(.91,1.09,rng()),sy=mix(.91,1.09,rng()),warp=p.variation*.25,phase=rng()*TAU;
+    let recipes=family==='open'?[hook,sweep,smallReach,curl,loop,crossbar]:family==='curl'?[curl,sweep,hook,crossbar,loop,smallReach]:[loop,hook,crossbar,smallReach,curl,sweep];
+    // The arm control sets the number of main gestures in every family.
+    const count=clamp(Math.round(p.arms),2,100);
+    const strands=[];
+    for(let k=0;k<count;k++){
+      let best=null,bestScore=Infinity;
+      const w=p.thickness*mix(.9,1.1,rng());
+      const recipe=recipes[k%recipes.length];
+      const extra=k>=recipes.length;
+      const direction=extra?(k-recipes.length+1)*2.399963229728653:0;
+      const reachScale=extra?mix(.55,1.13,rng()):1;
+      for(let attempt=0;attempt<(extra?3:12);attempt++){
+        let anchors=recipe(rng,p);
+        const localAngle=direction+(attempt===0?0:mix(-.30,.30,rng())*p.variation*2);
+        const lx=mix(1-p.variation*.16,1+p.variation*.16,rng());
+        anchors=transform(anchors,localAngle,lx*reachScale,mix(.93,1.07,rng())*reachScale,0,0);
+        const pts=smooth(anchors);
+        const score=scoreCandidate(pts,extra?strands.slice(-12):strands,w,p.orb);
+        if(score<bestScore){bestScore=score;best={pts,w,role:recipe.name};}
+      }
+      strands.push(best);
+    }
+    // A fork is a true merged silhouette, drawn as one compound stroke group.
+    // Its seam is removed by filling both tubes after outlining both.
+    if(count<100&&p.branches>0&&rng()<p.branches){
+      const parent=strands.find(s=>s.role==='hook')||strands[0];
+      const i=Math.floor(parent.pts.length*.35),root=parent.pts[i];
+      const q=parent.pts[Math.min(i+4,parent.pts.length-1)];
+      const tangent=Math.atan2(q.y-root.y,q.x-root.x);
+      for(let attempt=0;attempt<10;attempt++){
+        const side=rng()<.5?-1:1,a=tangent+side*mix(1.1,1.65,rng());
+        const L=mix(.12,.19,rng());
+        const pts=smooth([root,point(root.x+Math.cos(a)*L*.55,root.y+Math.sin(a)*L*.55),point(root.x+Math.cos(a+side*.20)*L,root.y+Math.sin(a+side*.20)*L)]);
+        const child={pts,w:parent.w*.92,role:'branch',parent:strands.indexOf(parent)};
+        // Once outside the junction, a branch must move into open paper.
+        // This prevents fork tips from folding back into the parent contour.
+        const clear=pts.filter((_,k)=>k%4===0).every(t=>dist(t,root)<parent.w*1.8||parent.pts.every((v,j)=>j%4!==0||dist(t,v)>parent.w*1.4));
+        if(clear&&scoreCandidate(pts,strands.filter(s=>s!==parent),child.w,p.orb)<.8){strands.push(child);break;}
+      }
+    }
+    for(const s of strands)s.pts=decorate(transform(s.pts,angle,sx,sy,warp,phase),s.w,p,rng);
+    // Fit the complete silhouette, including caps and orb, with a generous
+    // margin. The orb remains precisely at the center of the paper.
+    const extent=Math.max(p.orb*1.12,...strands.flatMap(s=>s.pts.map(q=>Math.max(Math.abs(q.x),Math.abs(q.y))+q.w*.65)));
+    const scale=Math.min(1.05,.418/extent);
+    for(const s of strands)for(const q of s.pts){q.x*=scale;q.y*=scale;q.w*=scale;q.s*=scale;}
+    const orb=p.orb*scale,outline=p.outline*scale;
+    const crossings=crossingList(strands,orb);
+    const patches=[];
+    for(const c of crossings){
+      // Alternate who is on top, but don't patch crowded triple crossings.
+      if(rng()>p.weave*.65||c.sin<.45)continue;
+      const w=Math.max(strands[c.a].w,strands[c.b].w)*scale;
+      const halfAngleSin=Math.sqrt((1-Math.sqrt(1-c.sin*c.sin))/2);
+      const radius=(w*.5+outline*1.4)/halfAngleSin+outline;
+      if(crossings.some(other=>other!==c&&dist(other,c)<radius*2.8))continue;
+      if(Math.hypot(c.x,c.y)<orb+radius)continue;
+      patches.push({...c,r:radius});
+    }
+    const orbNoise=noise(rng),oval=mix(.95,1.06,rng());
+    const orbPts=Array.from({length:160},(_,i)=>{
+      const t=i/160*TAU;
+      const r=orb*(1+p.hand*(.021*Math.sin(t*3+phase)+.010*Math.cos(t*5-phase)+.007*orbNoise(i/15)));
+      return point(Math.cos(t)*r,Math.sin(t)*r*oval);
+    });
+    return {seed,p,family,strands,orbPts,orb,outline,crossings,patches,scale};
+  }
+  const f=x=>(450+x*900).toFixed(2);
+  const path=pts=>'M'+pts.map(q=>f(q.x)+','+f(q.y)).join('L')+'Z';
+  function edges(pts){
+    const left=[],right=[];
+    for(let i=0;i<pts.length;i++){
+      const a=pts[Math.max(0,i-1)],b=pts[Math.min(pts.length-1,i+1)],d=dist(a,b)||1,q=pts[i];
+      const nx=-(b.y-a.y)/d,ny=(b.x-a.x)/d;
+      left.push(point(q.x+nx*q.w/2,q.y+ny*q.w/2));
+      right.push(point(q.x-nx*q.w/2,q.y-ny*q.w/2));
+    }
+    const cap=(q,heading)=>Array.from({length:13},(_,i)=>point(q.x+Math.cos(heading-i*Math.PI/12)*q.w/2,q.y+Math.sin(heading-i*Math.PI/12)*q.w/2));
+    const last=pts.at(-1),before=pts.at(-2),first=pts[0],after=pts[1];
+    const end=cap(last,Math.atan2(last.y-before.y,last.x-before.x)+Math.PI/2);
+    const start=cap(first,Math.atan2(after.y-first.y,after.x-first.x)-Math.PI/2);
+    return [...left,...end,...right.reverse(),...start];
+  }
+  function svg(model){
+    const {strands,outline,p,patches}=model,paper='#faf8f2',ink=/^#[0-9a-f]{6}$/i.test(p.ink)?p.ink:defaults.ink,lw=outline*900;
+    const paths=strands.map(s=>path(edges(s.pts)));
+    const shape=(d,halo=true)=>`${halo?`<path d="${d}" fill="${paper}" stroke="${paper}" stroke-width="${lw*1.75}"/>`:''}<path d="${d}" fill="${paper}" stroke="${ink}" stroke-width="${lw}"/>`;
+    let defs='',body='';
+    // Mask the under-strand instead of repainting the over-strand. This
+    // preserves one continuous outline and avoids raster seams at clip edges.
+    patches.forEach((c,i)=>{
+      defs+=`<clipPath id="over-${i}"><circle cx="${f(c.x)}" cy="${f(c.y)}" r="${(c.r*900).toFixed(2)}"/></clipPath>`;
+    });
+    const masks=new Map();
+    for(let b=0;b<strands.length;b++){
+      const cuts=patches.map((c,i)=>({c,i})).filter(({c})=>c.b===b);
+      if(!cuts.length)continue;
+      defs+=`<mask id="under-${b}" maskUnits="userSpaceOnUse" x="0" y="0" width="900" height="900"><rect width="900" height="900" fill="white"/>`;
+      for(const {c,i}of cuts)defs+=`<g clip-path="url(#over-${i})"><path d="${paths[c.a]}" fill="black" stroke="black" stroke-width="${lw*1.75}"/></g>`;
+      defs+='</mask>';masks.set(b,` mask="url(#under-${b})"`);
+    }
+    for(let i=0;i<strands.length;i++){
+      if(strands[i].parent!==undefined)continue;
+      const branch=strands.findIndex(s=>s.parent===i);
+      if(branch<0){body+=`<g${masks.get(i)||''}>${shape(paths[i])}</g>`;continue;}
+      // Union via masks: keep outlines only outside the other tube's fill.
+      defs+=`<mask id="fork-${i}" maskUnits="userSpaceOnUse" x="0" y="0" width="900" height="900"><rect width="900" height="900" fill="white"/><path d="${paths[branch]}" fill="black"/></mask><mask id="fork-${branch}" maskUnits="userSpaceOnUse" x="0" y="0" width="900" height="900"><rect width="900" height="900" fill="white"/><path d="${paths[i]}" fill="black"/></mask>`;
+      body+=`<path d="${paths[i]}" fill="${paper}"/><path d="${paths[branch]}" fill="${paper}"/><path d="${paths[i]}" fill="none" stroke="${ink}" stroke-width="${lw}" mask="url(#fork-${i})"/><path d="${paths[branch]}" fill="none" stroke="${ink}" stroke-width="${lw}" mask="url(#fork-${branch})"/>`;
+    }
+    body+=`<path d="${path(model.orbPts)}" fill="${p.solid?ink:paper}" stroke="${ink}" stroke-width="${lw*1.08}"/>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 900" width="900" height="900" role="img" aria-label="An asymmetric ${model.family} squig with a central orb"><rect width="900" height="900" fill="${paper}"/><defs>${defs}</defs><g stroke-linecap="round" stroke-linejoin="round">${body}</g></svg>`;
+  }
+  return {defaults,build,svg};
+})();
+if(typeof module!=='undefined')module.exports=Squig;
+
+</script>
+<script>
+(() => {
+  'use strict';
+  const $=id=>document.getElementById(id);
+  const defs=[
+    ['composition','arms','Arms',2,100,1],
+    ['composition','reach','Long reaches',.65,1.25,.01],
+    ['composition','loop','Loop openness',.2,1,.01],
+    ['line','thickness','Tube width',.025,.055,.001],
+    ['line','orb','Orb size',.065,.14,.001],
+    ['line','outline','Outline weight',.003,.007,.0001],
+    ['line','hand','Hand-drawn feel',0,1,.01],
+    ['character','curl','Curl turns',.25,1,.01],
+    ['character','variation','Uneven proportions',.1,.8,.01],
+    ['character','weave','Over / under',0,1,.01],
+    ['character','branches','Occasional forks',0,.8,.01]
+  ];
+  let settings={...Squig.defaults},seed=42,currentSvg='',history=[],frame=0;
+  let editStart=null;
+  const names={open:'Open & loose',knotted:'Looped knot',curl:'Hook & curl'};
+  const snapshot=()=>({seed,settings:{...settings}});
+  const equals=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+  const push=state=>{if(!state||equals(state,snapshot()))return;history.push(state);if(history.length>80)history.shift();$('btnBack').disabled=false;};
+  const format=(key,v)=>key==='arms'?String(v):key==='thickness'||key==='orb'?String(Math.round(v*1000)):key==='outline'?(v*1000).toFixed(1):String(Math.round(v*100));
+  function sync(){
+    for(const [,key]of defs){$('in-'+key).value=settings[key];$('out-'+key).value=format(key,settings[key]);}
+    $('seed').value=seed;$('family').value=settings.family;$('ink').value=settings.ink;$('solid').value=String(settings.solid);
+    $('btnBack').disabled=!history.length;
+  }
+  function draw(){
+    const model=Squig.build(seed,settings);
+    currentSvg=Squig.svg(model);
+    $('drawing').innerHTML=currentSvg;
+    $('specimen-label').textContent='Study '+String(seed).padStart(5,'0');
+    $('family-label').textContent=names[model.family];
+  }
+  function schedule(){cancelAnimationFrame(frame);frame=requestAnimationFrame(draw);}
+  function newSquig(){const before=snapshot();seed=(Math.floor(Math.random()*4294967296)>>>0);if(seed===before.seed)seed=(seed+1)>>>0;push(before);sync();draw();}
+  for(const [group,key,label,min,max,step]of defs){
+    const row=document.createElement('div');row.className='row';
+    row.innerHTML=`<div><label for="in-${key}">${label}</label><input id="in-${key}" type="range" min="${min}" max="${max}" step="${step}"></div><output id="out-${key}" for="in-${key}"></output>`;
+    $(group+'-controls').appendChild(row);
+    const input=$('in-'+key);
+    input.addEventListener('input',()=>{if(!editStart)editStart=snapshot();settings[key]=Number(input.value);$('out-'+key).value=format(key,settings[key]);schedule();});
+    input.addEventListener('change',()=>{push(editStart);editStart=null;});
+  }
+  for(const id of ['family','ink','solid'])$(id).addEventListener('change',()=>{const before=snapshot();settings[id]=id==='solid'?$(id).value==='true':$(id).value;push(before);draw();});
+  $('seed').addEventListener('change',()=>{const before=snapshot();const n=Number($('seed').value);seed=Number.isFinite(n)?Math.max(0,Math.min(4294967295,Math.floor(n))):42;push(before);sync();draw();});
+  $('btnNew').addEventListener('click',newSquig);$('btnReroll').addEventListener('click',newSquig);
+  $('drawing').addEventListener('click',newSquig);
+  $('drawing').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();newSquig();}});
+  $('btnBack').addEventListener('click',()=>{if(!history.length)return;const previous=history.pop();seed=previous.seed;settings={...previous.settings};editStart=null;sync();draw();});
+  $('btnReset').addEventListener('click',()=>{const before=snapshot();seed=42;settings={...Squig.defaults};push(before);sync();draw();});
+  $('btnWild').addEventListener('click',()=>{
+    const before=snapshot(),r=(a,b)=>a+Math.random()*(b-a);
+    settings={...settings,family:'mixed',arms:Math.random()<.5?3:4,reach:+r(.78,1.18).toFixed(2),loop:+r(.40,.95).toFixed(2),curl:+r(.45,.95).toFixed(2),thickness:+r(.032,.047).toFixed(3),orb:+r(.084,.12).toFixed(3),hand:+r(.25,.8).toFixed(2),variation:+r(.3,.7).toFixed(2),branches:+r(.1,.55).toFixed(2),weave:+r(.4,1).toFixed(2)};
+    seed=Math.floor(Math.random()*4294967296)>>>0;push(before);sync();draw();
+  });
+  function download(blob,name){
+    const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
+  }
+  function exportSvg(){
+    // Embed the complete recipe for exact reproduction, without adding any
+    // implementation text to the visible drawing.
+    return currentSvg.replace('<defs>',`<metadata>${JSON.stringify({generator:'Squig Lab — Orb Studies',version:1,seed,settings}).replace(/&/g,'&amp;').replace(/</g,'&lt;')}</metadata><defs>`);
+  }
+  $('btnSvg').addEventListener('click',()=>{draw();download(new Blob([exportSvg()],{type:'image/svg+xml'}),'squig-orb-'+seed+'.svg');$('status').textContent='SVG saved with this study’s seed and settings.';});
+  $('btnPng').addEventListener('click',async()=>{
+    const button=$('btnPng');button.disabled=true;$('status').textContent='Preparing PNG…';
+    draw();const exportSeed=seed,url=URL.createObjectURL(new Blob([exportSvg()],{type:'image/svg+xml'}));
+    try{
+      const img=new Image();await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(new Error('Image could not be rendered'));img.src=url;});
+      const canvas=document.createElement('canvas');canvas.width=2400;canvas.height=2400;const ctx=canvas.getContext('2d');if(!ctx)throw new Error('Canvas is unavailable');ctx.drawImage(img,0,0,2400,2400);
+      const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw new Error('PNG could not be created');
+      download(blob,'squig-orb-'+exportSeed+'.png');$('status').textContent='PNG saved · 2400 × 2400 pixels';
+    }catch(error){$('status').textContent='PNG export unavailable here. Save SVG to keep this study.';}
+    finally{URL.revokeObjectURL(url);button.disabled=false;}
+  });
+  sync();draw();
+})();
+</script></body></html>
