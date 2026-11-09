@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Evolving symmetric 2D cellular automata, after Stephen Wolfram's ruliobiology: each step stacked in 3D, with motif analysis across generations.">
+<title>Ruliobiology Stack — Evolving 2D Cellular Automata</title>
+<style>
+  :root{ --bg:#fff; --ink:#1e1e1e; --muted:#8a8a8a; --line:#e6e6e6; --soft:#f6f6f4; --sel:#1e1e1e; }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:13px/1.4 -apple-system,"Segoe UI",system-ui,sans-serif}
+  #app{display:grid;grid-template-columns:300px 1fr;height:100vh}
+  #app.ana{grid-template-columns:300px 1fr 470px}
+  aside,#anaPane{padding:14px 16px 20px;overflow:auto}
+  aside{border-right:1px solid var(--line)}
+  #anaPane{border-left:1px solid var(--line);display:none}
+  #app.ana #anaPane{display:block}
+  h1{font-size:15px;margin:0}
+  .sub{color:var(--muted);margin:2px 0 10px;font-size:12px}
+  .links{font-size:12px;margin:-4px 0 6px}.links a{color:var(--ink)}
+  h2{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600;margin:16px 0 6px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  h2 span{text-transform:none;letter-spacing:0;font-weight:400}
+  label.f{display:block;font-size:12px;color:#555;margin:7px 0 3px}
+  select,input[type=number]{width:100%;padding:5px 7px;border:1px solid var(--line);border-radius:4px;font:inherit;background:#fff}
+  input[type=range]{width:100%;margin:2px 0}
+  .row{display:flex;gap:6px}.row>*{flex:1;min-width:0}
+  button{padding:7px 8px;border:1px solid var(--line);border-radius:4px;background:var(--soft);font:inherit;cursor:pointer;color:var(--ink)}
+  button:hover:not(:disabled){border-color:#bbb}
+  button:disabled{opacity:.45;cursor:default}
+  button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .note{font-size:11px;color:var(--muted);margin-top:3px}
+  canvas.panel{display:block;width:100%;border:1px solid var(--line);border-radius:4px;background:#fff}
+  .pal{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+  .pal input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-radius:4px;padding:1px;background:#fff;cursor:pointer}
+  .check{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:12px}
+  .stat{font-variant-numeric:tabular-nums;color:#555;font-size:12px;margin-top:8px}
+  .sym{display:inline-block;padding:0 6px;border-radius:3px;background:#eef5ee;color:#2d6a2d}
+  main{display:grid;grid-template-rows:1fr auto;min-height:0;min-width:0}
+  #stage{position:relative;min-height:0;overflow:hidden}
+  canvas#gl{display:block;width:100%;height:100%;cursor:grab;touch-action:none}
+  #xs{position:absolute;right:12px;top:12px;background:#fff;border:1px solid var(--line);border-radius:4px;padding:6px}
+  #xs canvas{display:block;image-rendering:pixelated}
+  #xs div{font-size:11px;color:var(--muted);margin-bottom:4px}
+  #topbar{position:absolute;left:12px;top:10px;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+  #title3d{font-size:12px;color:#555}
+  .vbtns{display:flex;gap:4px}
+  .vbtns button{padding:3px 8px;font-size:11.5px;background:rgba(255,255,255,.9)}
+  #hl{font-size:11.5px;background:#fff6dd;border:1px solid #efd99a;border-radius:4px;padding:3px 8px;display:none}
+  #hl button{padding:0 6px;margin-left:6px;font-size:11px}
+  .hint{position:absolute;left:14px;bottom:10px;font-size:11px;color:var(--muted)}
+  #bottom{border-top:1px solid var(--line);padding:8px 12px 10px;background:#fff;min-width:0}
+  .strip{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scroll-behavior:auto}
+  .card{flex:0 0 auto;border:1px solid var(--line);border-radius:4px;padding:4px;cursor:pointer;background:#fff;text-align:center}
+  .card.sel{border-color:var(--sel);box-shadow:0 0 0 1px var(--sel)}
+  .card canvas{display:block;image-rendering:pixelated;margin:0 auto}
+  .card .lbl{font-size:10.5px;color:#555;margin-top:3px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .stripTitle{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:2px 0 5px}
+  #tip{position:fixed;pointer-events:none;background:#1e1e1e;color:#fff;font-size:11px;padding:4px 7px;border-radius:3px;display:none;z-index:10;white-space:nowrap}
+  .heat{position:relative}
+  .heat canvas{display:block;cursor:pointer}
+  .bar{height:3px;background:#eee;border-radius:2px;overflow:hidden;margin-top:6px}
+  .bar div{height:100%;width:0;background:#1e1e1e;transition:width .1s}
+  @media (max-width:900px){#app,#app.ana{grid-template-columns:1fr;grid-template-rows:auto 90vh auto;height:auto}aside,#anaPane{border:0}}
+</style>
+</head>
+<body>
+<div id="app">
+<aside>
+  <h1>Ruliobiology Stack</h1>
+  <div class="sub">Symmetric 2D cellular automata, evolved by single-point mutation. Each step is stacked below the last.</div>
+  <div class="links"><a href="../">&larr; Catalog</a> &middot; <a href="https://writings.stephenwolfram.com/2026/10/endless-forms-most-beautiful-and-most-wonderful-ruliobiology-and-the-theoretical-foundations-of-biological-form/" target="_blank" rel="noopener">Wolfram&rsquo;s essay &#8599;</a></div>
+
+  <h2>Rule space</h2>
+  <div class="row">
+    <div><label class="f">Colors</label>
+      <select id="K"><option>3</option><option>4</option><option selected>5</option><option>6</option><option>7</option><option>8</option></select></div>
+    <div><label class="f">Rule cases</label><input id="ncDisp" type="number" disabled></div>
+  </div>
+  <div class="note">More colors → many more rule cases. Mutations to cases the organism never uses are neutral and cost nothing, so the budget scales up automatically.</div>
+
+  <h2>Selection</h2>
+  <label class="f">Fitness</label>
+  <select id="ftype">
+    <option value="lifetime">Lifetime (steps before dying out)</option>
+    <option value="width">Maximum width</option>
+    <option value="tall">Tall & thin (lifetime ÷ width)</option>
+    <option value="wide">Wide & flat (width ÷ lifetime)</option>
+    <option value="mass">Bulk (cells per step)</option>
+    <option value="color">Fraction of one color</option>
+  </select>
+  <div id="colorPick" style="display:none"><label class="f">Color</label><select id="fcolor"></select></div>
+  <div class="note">Patterns that never die get fitness 0. A mutation is kept if fitness doesn't decrease.</div>
+
+  <h2>Evolution</h2>
+  <div class="row">
+    <div><label class="f">Lineages</label><input type="number" id="nLin" min="1" max="16" value="8"></div>
+    <div><label class="f">Mutations each</label><input type="number" id="budget" min="100" step="1000" value="5000"></div>
+  </div>
+  <label class="f">Immortality cutoff (max steps) <span id="maxV"></span></label>
+  <input type="range" id="maxSteps" min="50" max="400" step="10" value="250">
+  <label class="f">Mutation bias toward white <span id="pwV"></span></label>
+  <input type="range" id="pw" min="0.1" max="0.95" step="0.05" value="0.7">
+  <div class="note" id="pwNote"></div>
+  <div class="row" style="margin-top:8px">
+    <button class="primary" id="go">Evolve new</button>
+    <button id="cont" disabled>Continue</button>
+    <button id="stop" disabled>Stop</button>
+  </div>
+
+  <h2>Fitness <span id="progress"></span></h2>
+  <canvas class="panel" id="chart" width="536" height="220" style="height:110px"></canvas>
+  <div class="note">Gray = all lineages · dark line + red dots = selected lineage</div>
+
+  <h2>Genome <span id="genomeLbl"></span></h2>
+  <canvas class="panel" id="genome" width="536" height="140"></canvas>
+  <div class="note">Blocks by center color. Each square is a rule case (center + symmetric neighbor set); its color is the outcome. Outlined = used by this organism.</div>
+
+  <h2>Colors</h2>
+  <div class="pal" id="pal"></div>
+  <div class="row" style="margin-top:6px"><button id="palReset">Reset colors</button></div>
+
+  <h2>View</h2>
+  <div class="check"><input type="checkbox" id="cut"><label for="cut">Cutaway (slice through the middle)</label></div>
+  <div class="check"><input type="checkbox" id="spin" checked><label for="spin">Slow spin when idle</label></div>
+  <div class="row" style="margin-top:8px"><button id="grow">▶ Grow</button><button id="copy">Copy rule</button></div>
+  <div class="row" style="margin-top:6px"><button id="anaToggle">Analyze substructures →</button></div>
+  <div class="stat" id="stat"></div>
+</aside>
+<main>
+  <div id="stage">
+    <canvas id="gl"></canvas>
+    <div id="topbar">
+      <div id="title3d"></div>
+      <div class="vbtns"><button data-v="reset">Reset view</button><button data-v="iso">Iso</button><button data-v="side">Side</button><button data-v="top">Top</button><button data-v="bottom">Bottom</button></div>
+      <div id="hl"></div>
+    </div>
+    <div id="xs"><div>Center cross-section (time ↓)</div><canvas id="xsC" width="200" height="200"></canvas></div>
+    <div class="hint">drag: orbit · right-drag / shift-drag / two fingers: pan · wheel / pinch: zoom to cursor · double-click: reset · arrows: pan · +/−: zoom</div>
+  </div>
+  <div id="bottom">
+    <div class="stripTitle">Population (click to view)</div>
+    <div class="strip" id="pop"></div>
+    <div class="stripTitle" style="margin-top:6px">Selected lineage: each improvement (click to view)</div>
+    <div class="strip" id="lin"></div>
+  </div>
+</main>
+<section id="anaPane">
+  <h1>Recurring substructures</h1>
+  <div class="sub">Counts every s×s patch centered on a non-white cell in every time layer. Patches that are rotations or reflections of each other count as the same motif.</div>
+  <div class="row">
+    <div><label class="f">Compare across</label>
+      <select id="aMode">
+        <option value="lineage">Generations of selected lineage</option>
+        <option value="time">Time steps of shown organism</option>
+        <option value="pop">Population (latest of each lineage)</option>
+      </select></div>
+    <div style="flex:.55"><label class="f">Patch</label><select id="aS"><option value="3">3×3</option><option value="5">5×5</option></select></div>
+  </div>
+  <div class="row">
+    <div><label class="f">Min non-white cells</label><input type="number" id="aMin" min="1" max="25" value="4"></div>
+    <div><label class="f">Motifs shown</label><input type="number" id="aTop" min="5" max="80" value="30"></div>
+  </div>
+  <div class="row" style="margin-top:8px"><button class="primary" id="aRun">Run analysis</button></div>
+  <div class="bar"><div id="aBar"></div></div>
+  <div class="stat" id="aSum"></div>
+  <h2>Motif recurrence <span id="aColLbl"></span></h2>
+  <div class="heat"><canvas id="aHeat" width="876" height="200" style="width:438px"></canvas></div>
+  <div class="note">Rows ranked by how many columns contain the motif, then by total count. Shading = log count. Click a row to highlight that motif in 3D. In generation/population mode, clicking a cell also loads that organism.</div>
+  <div id="caseSec">
+    <h2>Conserved rule cases <span id="cSum"></span></h2>
+    <div class="heat"><canvas id="cHeat" width="876" height="100" style="width:438px"></canvas></div>
+    <div class="note">Rows = rule cases the organisms actually use (sorted by first use). A colored cell means the case is used in that column, colored by its outcome. Long unbroken rows are conserved "genes".</div>
+  </div>
+</section>
+</div>
+<div id="tip"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script id="coreSrc">
+function core(G){
+  // ---- K-color, von Neumann, D4-symmetric rule spaces ----
+  // A rule case is (center c; neighbors N,E,S,W) with the neighbor 4-cycle identified up to the
+  // 8 symmetries of the square. One case table per K, cached.
+  const SYMS = [[0,1,2,3],[1,2,3,0],[2,3,0,1],[3,0,1,2],[3,2,1,0],[2,1,0,3],[1,0,3,2],[0,3,2,1]];
+  const spaces = {};
+
+  function makeSpace(K){
+    if (spaces[K]) return spaces[K];
+    const K2=K*K, K3=K2*K, K4=K3*K, K5=K4*K;
+    const CASEMAP = new Uint16Array(K5);
+    const CASES = []; let NC = 0;
+    const seen = new Map();
+    for (let c=0;c<K;c++) for (let n=0;n<K;n++) for (let e=0;e<K;e++) for (let s=0;s<K;s++) for (let w=0;w<K;w++){
+      const v=[n,e,s,w]; let m=Infinity, best=null;
+      for (const p of SYMS){ const k=v[p[0]]*K3+v[p[1]]*K2+v[p[2]]*K+v[p[3]]; if(k<m){m=k;best=[v[p[0]],v[p[1]],v[p[2]],v[p[3]]];} }
+      const key=c*K4+m;
+      if(!seen.has(key)){ seen.set(key,NC++); CASES.push([c,...best]); }
+      CASEMAP[c*K4+n*K3+e*K2+s*K+w]=seen.get(key);
+    }
+    const blockStart=[]; for(let c=0;c<K;c++) blockStart.push(CASES.findIndex(x=>x[0]===c)); blockStart.push(NC);
+
+    // Simulate from a single centered cell of color 1. With a D4-symmetric rule and that seed the pattern
+    // is exactly D4-symmetric, so only the quadrant x,y >= 0 is computed; reads across axes reflect.
+    function simulate(rule, maxSteps, opts={}){
+      const LUT = new Uint8Array(K5);
+      for (let i=0;i<K5;i++) LUT[i]=rule[CASEMAP[i]];
+      const W = maxSteps+3;
+      let A = new Uint8Array(W*W), B = new Uint8Array(W*W);
+      A[0]=1; let extA=0, extB=0;
+      const rows = opts.rows ? [] : null, layers = opts.layers ? [] : null;
+      const usage = opts.usage ? new Float64Array(NC) : null;
+      const cc=new Float64Array(K); cc[1]=1;
+      let cells=1, maxExt=0, life=0;
+      const snap=(arr,ext)=>{
+        if(rows){ const r=new Uint8Array(ext+1); for(let x=0;x<=ext;x++) r[x]=arr[x]; rows.push(r); }
+        if(layers){ const e1=ext+1, q=new Uint8Array(e1*e1); for(let y=0;y<=ext;y++) for(let x=0;x<=ext;x++) q[y*e1+x]=arr[y*W+x]; layers.push({ext,q}); }
+      };
+      snap(A,0);
+      const seenH = opts.layers||opts.noCycle ? null : new Set(); // repeat state → immortal
+      for (let t=1;t<=maxSteps;t++){
+        const R = Math.min(Math.max(extA+1,extB), W-2);
+        let ne=-1, h1=0x811c9dc5|0, h2=7;
+        for (let y=0;y<=R;y++){
+          const row=y*W, wy=(y?2:1);
+          for (let x=0;x<=R;x++){
+            const i=row+x, c=A[i];
+            const n = y? A[i-W] : A[i+W];
+            const s = A[i+W];
+            const w = x? A[i-1] : A[i+1];
+            const e = A[i+1];
+            const li = c*K4+n*K3+e*K2+s*K+w;
+            const v = LUT[li];
+            B[i]=v;
+            if(usage && li) usage[CASEMAP[li]] += wy*(x?2:1);
+            if(v){ if(x>ne)ne=x; if(y>ne)ne=y; const wt=wy*(x?2:1); cc[v]+=wt; cells+=wt;
+              if(seenH){ const p=y*1031+x; h1=Math.imul(h1^(p*9+v),16777619); h2=(Math.imul(h2,31)+p*11+v)|0; } }
+          }
+        }
+        extB=extA; extA=ne; const T=A; A=B; B=T;
+        if(ne<0){ life=t; break; }
+        if(seenH){ const key=h1+','+h2+','+ne; if(seenH.has(key)) { life=0; break; } seenH.add(key); }
+        if(ne>maxExt) maxExt=ne;
+        snap(A,ne);
+      }
+      return { life, maxWidth: 2*maxExt+1, cells, cc, rows, layers, usage };
+    }
+
+    const sp = { K, NC, CASES, CASEMAP, blockStart, simulate };
+    spaces[K]=sp; return sp;
+  }
+
+  // Fitness. Patterns that never die (within maxSteps) get zero, as in the article.
+  // Tiny lifetime tie-breakers give width/color/bulk a gradient to climb from the null rule.
+  function fitness(res, type, color){
+    if(!res.life) return 0;
+    switch(type){
+      case 'lifetime': return res.life;
+      case 'width':    return res.maxWidth + res.life*1e-4;
+      case 'tall':     return res.life / res.maxWidth;
+      case 'wide':     return res.maxWidth / res.life;
+      case 'color':    return (res.cells ? (res.cc[color]||0)/res.cells : 0) + res.life*1e-5;
+      case 'mass':     return res.cells / res.life + res.life*1e-4;
+    }
+    return res.life;
+  }
+
+  // ---- motif canonicalization: s×s patches up to the 8 symmetries of the square ----
+  const permCache = {};
+  function patchPerms(s){
+    if(permCache[s]) return permCache[s];
+    const T=[(r,c)=>[r,c],(r,c)=>[c,s-1-r],(r,c)=>[s-1-r,s-1-c],(r,c)=>[s-1-c,r],
+             (r,c)=>[r,s-1-c],(r,c)=>[s-1-r,c],(r,c)=>[c,r],(r,c)=>[s-1-c,s-1-r]];
+    const P=T.map(f=>{ const a=new Int32Array(s*s); for(let r=0;r<s;r++)for(let c=0;c<s;c++){const [rr,cc]=f(r,c); a[r*s+c]=rr*s+cc;} return a; });
+    return permCache[s]=P;
+  }
+  // returns canonical key string for patch array p (length s*s), base K; split in halves to stay exact
+  function canonKey(p, s, K, P){
+    const n=s*s, h=Math.min(n,13);
+    let bh=Infinity, bl=Infinity;
+    for(const perm of P){
+      let hi=0; for(let i=0;i<h;i++) hi=hi*K+p[perm[i]];
+      if(hi>bh) continue;
+      let lo=0; for(let i=h;i<n;i++) lo=lo*K+p[perm[i]];
+      if(hi<bh||lo<bl){ bh=hi; bl=lo; }
+    }
+    return n<=13 ? bh : bh+':'+bl;
+  }
+
+  G.makeSpace=makeSpace; G.fitness=fitness; G.patchPerms=patchPerms; G.canonKey=canonKey;
+}
+
+
+</script>
+<script>
+const G = {}; core(G);
+const $ = id => document.getElementById(id);
+
+/* ================= palette ================= */
+// The article names white (background), purple, green, red, yellow; extra colors extend it for K > 5.
+const DEFAULT_PAL = ['#ffffff','#d8433c','#f2bd2b','#5aa451','#7d4fb0','#3f7fc1','#e5822e','#d46aa6'];
+let PAL = DEFAULT_PAL.slice();
+try { const s = JSON.parse(localStorage.getItem('rulio-pal8')||'null'); if (Array.isArray(s) && s.length===8) PAL = s; } catch {}
+const savePal = () => { try { localStorage.setItem('rulio-pal8', JSON.stringify(PAL)); } catch {} };
+const rgb = h => [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)];
+let K = 5, SP = G.makeSpace(5);
+
+function buildPalUI(){
+  const el=$('pal'); el.innerHTML='';
+  for(let k=1;k<K;k++){
+    const i=document.createElement('input'); i.type='color'; i.value=PAL[k]; i.title='color '+k+(k===1?' (seed)':'');
+    i.oninput=()=>{ PAL[k]=i.value; savePal(); onPalette(); };
+    el.appendChild(i);
+  }
+  const fc=$('fcolor'), prev=fc.value; fc.innerHTML='';
+  for(let k=1;k<K;k++){ const o=document.createElement('option'); o.value=k; o.textContent='Color '+k+(k===1?' (seed)':''); fc.appendChild(o); }
+  if(prev && +prev<K) fc.value=prev;
+}
+$('palReset').onclick=()=>{ PAL=DEFAULT_PAL.slice(); savePal(); buildPalUI(); onPalette(); };
+function onPalette(){ drawGenome(); refreshCards(true); buildLinStrip(); if(view){ drawXS(); recolor(); } drawChart(); if(ana) drawAnalysis(); }
+
+/* ================= evolution (workers) ================= */
+const CORE_SRC = document.getElementById('coreSrc').textContent;
+const evoSrc = CORE_SRC + `
+const G={}; core(G);
+let st=null, stop=false;
+onmessage = ({data:m}) => {
+  if(m.cmd==='start'){
+    const sp=G.makeSpace(m.K);
+    st={sp, rule:Uint8Array.from(m.rule), i:m.i||0, end:(m.i||0)+m.budget, p:m, sims:0};
+    const r=sp.simulate(st.rule,m.maxSteps,{usage:true}); st.cur=G.fitness(r,m.type,m.color); st.used=r.usage;
+    stop=false; run();
+  } else if(m.cmd==='stop'){ stop=true; }
+};
+function run(){
+  const p=st.p, sp=st.sp, K=sp.K, t0=performance.now(), imps=[];
+  while(st.i<st.end && performance.now()-t0<60){
+    const idx=1+Math.floor(Math.random()*(sp.NC-1)), old=st.rule[idx];
+    let nv; do { nv = Math.random()<p.pw ? 0 : 1+Math.floor(Math.random()*(K-1)); } while(nv===old);
+    st.rule[idx]=nv; st.i++;
+    if(!st.used[idx] && st.cur>0) continue;   // case never used → phenotype identical → neutral, accept
+    st.sims++;
+    const r=sp.simulate(st.rule,p.maxSteps,{usage:true}), f=G.fitness(r,p.type,p.color);
+    if(f>=st.cur){ if(f>st.cur) imps.push({i:st.i,f,rule:Array.from(st.rule),idx}); st.cur=f; st.used=r.usage; }
+    else st.rule[idx]=old;
+  }
+  const done = st.i>=st.end || stop;
+  postMessage({type:done?'done':'tick', i:st.i, sims:st.sims, cur:st.cur, imps, rule: done?Array.from(st.rule):null});
+  if(!done) setTimeout(run,0);
+}`;
+const evoURL = URL.createObjectURL(new Blob([evoSrc],{type:'text/javascript'}));
+
+let lineages=[], selected=0, params=null, running=0;
+function readParams(){
+  return { K, type:$('ftype').value, color:+$('fcolor').value||1, maxSteps:+$('maxSteps').value, pw:+$('pw').value, budget:Math.max(100,+$('budget').value|0) };
+}
+function curMax(){ return params? params.maxSteps : +$('maxSteps').value; }
+function startLineage(L){
+  if(!L.worker){ L.worker=new Worker(evoURL); L.worker.onmessage=e=>onMsg(L,e.data); }
+  L.running=true; running++;
+  L.worker.postMessage({cmd:'start', rule:L.liveRule, i:L.i, ...params});
+}
+function onMsg(L,m){
+  L.i=m.i; L.sims=m.sims;
+  for(const imp of m.imps){ L.fit=imp.f; L.hist.push([imp.i,imp.f]); L.imps.push({i:imp.i,f:imp.f,rule:Uint8Array.from(imp.rule),idx:imp.idx}); L.rule=Uint8Array.from(imp.rule); L.dirty=true; }
+  if(m.rule) L.liveRule=Array.from(m.rule);
+  if(m.type==='done'){ L.running=false; running--; if(running===0) setRunning(false); }
+  scheduleUI();
+}
+let uiQueued=false, lastView=0;
+function scheduleUI(){ if(uiQueued) return; uiQueued=true; requestAnimationFrame(()=>{ uiQueued=false; updateUI(); }); }
+function updateUI(){
+  const tot=lineages.reduce((a,L)=>a+L.i,0), sims=lineages.reduce((a,L)=>a+(L.sims||0),0);
+  $('progress').textContent = lineages.length? `${tot.toLocaleString()} mutations · ${sims.toLocaleString()} simulated`+(running?' · running':'') : '';
+  drawChart(); refreshCards();
+  const L=lineages[selected];
+  if(L && L.dirty && (!running || performance.now()-lastView>700)){ L.dirty=false; lastView=performance.now(); if(!pinned) showRule(L.rule, `Lineage ${selected+1} · latest`); buildLinStrip(); }
+}
+function setRunning(on){ $('go').disabled=on; $('stop').disabled=!on; $('cont').disabled=on||!lineages.length; ['ftype','fcolor','maxSteps','K'].forEach(id=>$(id).disabled=on); if(!on) scheduleUI(); }
+
+$('go').onclick=()=>{
+  for(const L of lineages) L.worker?.terminate();
+  params=readParams(); const n=Math.max(1,Math.min(16,+$('nLin').value|0));
+  const nullRule=new Uint8Array(SP.NC);
+  const f0=G.fitness(SP.simulate(nullRule,params.maxSteps),params.type,params.color);
+  lineages=[]; running=0; selected=0; pinned=false;
+  for(let k=0;k<n;k++) lineages.push({ id:k, i:0, sims:0, fit:f0, hist:[[0,f0]], imps:[{i:0,f:f0,rule:nullRule.slice(),idx:-1}], rule:nullRule.slice(), liveRule:Array.from(nullRule), dirty:true });
+  buildPopCards(); buildLinStrip(); setRunning(true);
+  for(const L of lineages) startLineage(L);
+};
+$('cont').onclick=()=>{ if(!lineages.length) return; params={...params, budget:Math.max(100,+$('budget').value|0), pw:+$('pw').value}; setRunning(true); for(const L of lineages) startLineage(L); };
+$('stop').onclick=()=>{ for(const L of lineages) if(L.running) L.worker.postMessage({cmd:'stop'}); };
+
+/* ================= drawing helpers ================= */
+// slice image of the center row through time; mark(t,x) → false dims the cell
+function sliceCanvas(res, maxW, maxH, cv, mark){
+  const rows=res.rows, H=rows.length, E=(res.maxWidth-1)>>1, Wd=2*E+1;
+  const img=new ImageData(Wd,H), d=img.data, cols=PAL.map(rgb);
+  for(let t=0;t<H;t++){ const r=rows[t]; for(let x=-E;x<=E;x++){ const a=Math.abs(x); const v=a<r.length?r[a]:0; let c=cols[v]; if(v&&mark&&!mark(t,x)) c=c.map(u=>Math.round(u*0.15+232*0.85)); const o=(t*Wd+x+E)*4; d[o]=c[0];d[o+1]=c[1];d[o+2]=c[2];d[o+3]=255; } }
+  const off=document.createElement('canvas'); off.width=Wd; off.height=H; off.getContext('2d').putImageData(img,0,0);
+  const s=Math.max(0.2,Math.min(maxW/Wd,maxH/H,8)), w=Math.max(1,Math.round(Wd*s)), h=Math.max(1,Math.round(H*s));
+  cv=cv||document.createElement('canvas'); const dpr=Math.min(devicePixelRatio||1,2);
+  cv.width=Math.round(w*dpr); cv.height=Math.round(h*dpr); cv.style.width=w+'px'; cv.style.height=h+'px';
+  const ctx=cv.getContext('2d'); ctx.imageSmoothingEnabled=s<1; ctx.drawImage(off,0,0,cv.width,cv.height);
+  return cv;
+}
+function simFor(rule){ return SP.simulate(rule, curMax(), {rows:true}); }
+function fmt(f){ const t=params?params.type:'lifetime'; return (t==='lifetime'||t==='width')? String(Math.floor(f)) : f.toFixed(3); }
+
+function buildPopCards(){
+  const el=$('pop'); el.innerHTML='';
+  lineages.forEach((L,k)=>{
+    const c=document.createElement('div'); c.className='card'+(k===selected?' sel':'');
+    c.innerHTML=`<div class="th" style="height:64px;display:flex;align-items:flex-end;justify-content:center"></div><div class="lbl"></div>`;
+    c.onclick=()=>selectLineage(k);
+    L.card=c; L.cardKey=null; el.appendChild(c);
+  });
+  refreshCards(true);
+}
+function selectLineage(k){ selected=k; pinned=false; const L=lineages[k]; L.dirty=false; [...$('pop').children].forEach((c,j)=>c.classList.toggle('sel',j===k)); showRule(L.rule,`Lineage ${k+1} · latest`); buildLinStrip(); drawChart(); }
+function refreshCards(force){
+  for(const [k,L] of lineages.entries()){
+    if(!L.card) continue;
+    const key=L.imps.length;
+    if(force||L.cardKey!==key){ L.cardKey=key; const th=L.card.querySelector('.th'); th.innerHTML=''; th.appendChild(sliceCanvas(simFor(L.rule),84,64)); }
+    L.card.querySelector('.lbl').textContent=`#${k+1} · ${fmt(L.fit)}`;
+  }
+}
+function linList(L){ return L.imps.length>60? L.imps.filter((_,i)=>i%Math.ceil(L.imps.length/60)===0||i===L.imps.length-1) : L.imps; }
+function buildLinStrip(){
+  const el=$('lin'); el.innerHTML=''; const L=lineages[selected]; if(!L) return;
+  for(const imp of linList(L)){
+    const c=document.createElement('div'); c.className='card';
+    c.appendChild(sliceCanvas(simFor(imp.rule),56,44));
+    const l=document.createElement('div'); l.className='lbl'; l.textContent=`${imp.i} · ${fmt(imp.f)}`; c.appendChild(l);
+    c.onclick=()=>{ pinned=true; [...el.children].forEach(x=>x.classList.remove('sel')); c.classList.add('sel'); showRule(imp.rule,`Lineage ${selected+1} · mutation ${imp.i}`, imp.idx); };
+    el.appendChild(c);
+  }
+  el.scrollLeft=el.scrollWidth;
+}
+// vertical wheel scrolls the thumbnail strips sideways
+for(const id of ['pop','lin']) $(id).addEventListener('wheel',e=>{ if(Math.abs(e.deltaY)>Math.abs(e.deltaX)){ $(id).scrollLeft+=e.deltaY; e.preventDefault(); } },{passive:false});
+
+function drawChart(){
+  const cv=$('chart'), ctx=cv.getContext('2d'), W=cv.width, H=cv.height, P=26;
+  ctx.clearRect(0,0,W,H);
+  if(!lineages.length){ ctx.fillStyle='#aaa'; ctx.font='22px system-ui'; ctx.fillText('Press "Evolve new"',P,H/2); return; }
+  const maxI=Math.max(1,...lineages.map(L=>L.i)), maxF=Math.max(1e-9,...lineages.map(L=>L.fit));
+  const X=i=>P+(W-P-8)*i/maxI, Y=f=>H-P-(H-P-10)*f/maxF;
+  ctx.strokeStyle='#ddd'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(P,8); ctx.lineTo(P,H-P); ctx.lineTo(W-8,H-P); ctx.stroke();
+  ctx.fillStyle='#999'; ctx.font='18px system-ui'; ctx.fillText(fmt(maxF),2,20); ctx.textAlign='right'; ctx.fillText(maxI.toLocaleString(),W-8,H-4); ctx.textAlign='left';
+  const line=(L,col,w)=>{ ctx.strokeStyle=col; ctx.lineWidth=w; ctx.beginPath(); let pf=L.hist[0][1]; ctx.moveTo(X(0),Y(pf));
+    for(const [i,f] of L.hist){ ctx.lineTo(X(i),Y(pf)); ctx.lineTo(X(i),Y(f)); pf=f; } ctx.lineTo(X(L.i),Y(pf)); ctx.stroke(); };
+  lineages.forEach((L,k)=>{ if(k!==selected) line(L,'#cfcfcf',2); });
+  const S=lineages[selected]; line(S,'#333',2.5);
+  ctx.fillStyle='#d8433c'; for(const [i,f] of S.hist){ ctx.beginPath(); ctx.arc(X(i),Y(f),4,0,7); ctx.fill(); }
+}
+
+let genomeHi=-1;
+function drawGenome(){
+  const cv=$('genome'), ctx=cv.getContext('2d');
+  $('genomeLbl').textContent=`${SP.NC.toLocaleString()} rule cases`;
+  if(!view){ ctx.clearRect(0,0,cv.width,cv.height); return; }
+  const rule=view.rule, used=view.res.usage;
+  const W=cv.width, gap=8, bw=(W-8-gap*(K-1))/K, top=16;
+  const per=SP.blockStart[1]-SP.blockStart[0]; // same count per center color
+  const cols=Math.max(1,Math.round(Math.sqrt(per*bw/90))), rowsN=Math.ceil(per/cols), cell=Math.min(bw/cols, 14);
+  const H=Math.ceil(top+rowsN*cell+4); if(cv.height!==H){ cv.height=H; cv.style.height=(H/2)+'px'; }
+  ctx.clearRect(0,0,W,H);
+  for(let id=0;id<SP.NC;id++){
+    const c=SP.CASES[id][0], j=id-SP.blockStart[c], bx=4+c*(bw+gap), x=bx+(j%cols)*cell, y=top+Math.floor(j/cols)*cell;
+    ctx.fillStyle=rule[id]?PAL[rule[id]]:'#f1f1f1'; ctx.fillRect(x,y,Math.max(1,cell-1),Math.max(1,cell-1));
+    if(used&&used[id]&&cell>=4){ ctx.strokeStyle='#000'; ctx.lineWidth=1.5; ctx.strokeRect(x+.75,y+.75,cell-2.5,cell-2.5); }
+    if(id===genomeHi){ ctx.strokeStyle='#d8433c'; ctx.lineWidth=3; ctx.strokeRect(x-1,y-1,cell+1,cell+1); }
+  }
+  for(let c=0;c<K;c++){ const bx=4+c*(bw+gap); ctx.fillStyle=c?PAL[c]:'#fff'; ctx.strokeStyle='#bbb'; ctx.lineWidth=1; ctx.fillRect(bx,2,11,11); ctx.strokeRect(bx+.5,2.5,10,10); }
+}
+
+/* ================= 3D ================= */
+const canvas=$('gl');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,preserveDrawingBuffer:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+const scene=new THREE.Scene(); scene.background=new THREE.Color('#ffffff');
+const camera=new THREE.PerspectiveCamera(32,1,0.1,20000);
+scene.add(new THREE.HemisphereLight(0xffffff,0xb8b8b8,0.8));
+const sun=new THREE.DirectionalLight(0xffffff,0.5); sun.position.set(0.8,1.5,0.6); scene.add(sun);
+const fill=new THREE.DirectionalLight(0xffffff,0.22); fill.position.set(-1,-0.4,-0.7); scene.add(fill);
+const group=new THREE.Group(); scene.add(group);
+const geo=new THREE.BoxGeometry(1,1,1), mat=new THREE.MeshLambertMaterial({color:0xffffff});
+let mesh=null, layerEnds=[], view=null, pinned=false, highlight=null;
+
+function showRule(rule, title, hiIdx=-1, keepCam=false){
+  const res=SP.simulate(rule, curMax(), {rows:true, layers:true, usage:true});
+  view={rule:Uint8Array.from(rule), res, title};
+  if(highlight) computeMarks();
+  build3D(keepCam); drawXS(); genomeHi=hiIdx; drawGenome();
+  $('title3d').textContent=title;
+  const used=res.usage? res.usage.reduce((a,v)=>a+(v>0),0):0;
+  $('stat').innerHTML = res.life
+    ? `lifetime <b>${res.life}</b> · max width <b>${res.maxWidth}</b> · ${res.cells.toLocaleString()} cells<br>rule cases used: <b>${used}</b> of ${SP.NC}<br>symmetry: <span class="sym">D4 · 8-fold (by construction)</span>`
+    : `never dies within ${curMax()} steps (fitness 0)`;
+}
+function occFn(layers){
+  return (t,x,y)=>{ if(t<0||t>=layers.length) return 0; const L=layers[t]; const ax=x<0?-x:x, ay=y<0?-y:y; if(ax>L.ext||ay>L.ext) return 0; return L.q[ay*(L.ext+1)+ax]; };
+}
+const mkey=(t,x,y)=>(t*1024+(y+512))*1024+(x+512);
+function build3D(keepCam){
+  const {layers}=view.res, T=layers.length, cut=$('cut').checked, occ0=occFn(layers);
+  const occ=cut? (t,x,y)=> y<0?0:occ0(t,x,y) : occ0;
+  const items=[]; layerEnds=[]; const CAP=900000; let E=0;
+  for(let t=0;t<T&&items.length<CAP*4;t++){
+    const e=layers[t].ext; E=Math.max(E,e);
+    for(let y=cut?0:-e;y<=e;y++) for(let x=-e;x<=e;x++){
+      const v=occ(t,x,y); if(!v) continue;
+      if(occ(t,x+1,y)&&occ(t,x-1,y)&&occ(t,x,y+1)&&occ(t,x,y-1)&&occ(t-1,x,y)&&occ(t+1,x,y)) continue; // hidden inside
+      items.push(x,y,t,v);
+    }
+    layerEnds.push(items.length/4);
+  }
+  const n=Math.min(items.length/4,CAP);
+  if(mesh){ group.remove(mesh); mesh.dispose&&mesh.dispose(); }
+  mesh=new THREE.InstancedMesh(geo,mat,Math.max(1,n));
+  const m=new THREE.Matrix4();
+  for(let k=0;k<n;k++){ m.makeTranslation(items[4*k],-items[4*k+2],items[4*k+1]); mesh.setMatrixAt(k,m); }
+  mesh.count=n; mesh.userData.items=items; mesh.instanceMatrix.needsUpdate=true;
+  group.add(mesh); group.position.set(0,(T-1)/2,0);
+  view.extent={E,T};
+  recolor();
+  if(!keepCam) setView('reset',true);
+}
+function recolor(){
+  if(!mesh) return; const it=mesh.userData.items, cols=PAL.map(h=>new THREE.Color(h)), dim=cols.map(c=>c.clone().lerp(new THREE.Color('#ececec'),0.85));
+  const marks=highlight&&highlight.marks;
+  for(let k=0;k<mesh.count;k++){ const v=it[4*k+3]; const on=!marks||marks.has(mkey(it[4*k+2],it[4*k],it[4*k+1])); mesh.setColorAt(k,on?cols[v]:dim[v]); }
+  if(mesh.instanceColor) mesh.instanceColor.needsUpdate=true;
+}
+function drawXS(){ const marks=highlight&&highlight.marks; sliceCanvas(view.res,200,240,$('xsC'), marks?(t,x)=>marks.has(mkey(t,x,0)):null); }
+$('cut').onchange=()=>{ if(view) build3D(true); };
+
+/* ---------- camera controls: orbit / pan / zoom-to-cursor, touch, inertia ---------- */
+const cam={ target:new THREE.Vector3(), theta:0.8, phi:1.12, dist:100, home:100, vT:0, vP:0, pan:new THREE.Vector3(), lastTouch:0 };
+const ptrs=new Map(); let dragMode=null, lastPinch=null;
+function camBasis(){
+  const off=new THREE.Vector3(Math.sin(cam.phi)*Math.cos(cam.theta), Math.cos(cam.phi), Math.sin(cam.phi)*Math.sin(cam.theta));
+  const fwd=off.clone().negate(), right=new THREE.Vector3().crossVectors(fwd,new THREE.Vector3(0,1,0)).normalize();
+  if(right.lengthSq()<1e-6) right.set(1,0,0);
+  const up=new THREE.Vector3().crossVectors(right,fwd).normalize();
+  return {off,right,up};
+}
+function panBy(dx,dy){ // screen pixels
+  const h=canvas.clientHeight||1, scale=2*cam.dist*Math.tan(THREE.MathUtils.degToRad(camera.fov/2))/h;
+  const {right,up}=camBasis();
+  cam.target.addScaledVector(right,-dx*scale).addScaledVector(up,dy*scale);
+}
+function zoomAt(factor, cx, cy){ // factor<1 zooms in, toward screen point (cx,cy)
+  const nd=Math.min(cam.home*6,Math.max(2,cam.dist*factor)); factor=nd/cam.dist;
+  if(cx!=null){
+    const r=canvas.getBoundingClientRect(), ndc=new THREE.Vector2(((cx-r.left)/r.width)*2-1, -((cy-r.top)/r.height)*2+1);
+    const ray=new THREE.Raycaster(); ray.setFromCamera(ndc,camera);
+    const n=camera.getWorldDirection(new THREE.Vector3()), plane=new THREE.Plane().setFromNormalAndCoplanarPoint(n,cam.target);
+    const p=new THREE.Vector3(); if(ray.ray.intersectPlane(plane,p)) cam.target.lerp(p,1-factor);
+  }
+  cam.dist=nd;
+}
+let idleAt=0; const poke=()=>{ idleAt=performance.now(); };
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+canvas.addEventListener('pointerdown',e=>{
+  canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY}); poke();
+  cam.vT=cam.vP=0; cam.pan.set(0,0,0);
+  if(ptrs.size===2){ dragMode='touch2'; lastPinch=null; }
+  else dragMode=(e.button===2||e.button===1||e.shiftKey||e.altKey||spaceDown)?'pan':'rotate';
+  canvas.style.cursor=dragMode==='pan'?'move':'grabbing';
+});
+canvas.addEventListener('pointermove',e=>{
+  if(!ptrs.has(e.pointerId)) return; const p=ptrs.get(e.pointerId), dx=e.clientX-p.x, dy=e.clientY-p.y; poke();
+  if(dragMode==='touch2'){
+    p.x=e.clientX; p.y=e.clientY; const [a,b]=[...ptrs.values()];
+    const mid={x:(a.x+b.x)/2,y:(a.y+b.y)/2}, d=Math.hypot(a.x-b.x,a.y-b.y);
+    if(lastPinch){ panBy(mid.x-lastPinch.mid.x, mid.y-lastPinch.mid.y); zoomAt(lastPinch.d/d, mid.x, mid.y); }
+    lastPinch={mid,d}; return;
+  }
+  p.x=e.clientX; p.y=e.clientY;
+  if(dragMode==='rotate'){ cam.vT=dx*0.006; cam.vP=-dy*0.006; cam.theta+=cam.vT; cam.phi=Math.min(Math.PI-0.02,Math.max(0.02,cam.phi+cam.vP)); }
+  else if(dragMode==='pan'){ panBy(dx,dy); cam.pan.set(dx,dy,0); }
+});
+const endPtr=e=>{ ptrs.delete(e.pointerId); if(ptrs.size===0){ dragMode=null; canvas.style.cursor='grab'; } else if(ptrs.size===1){ dragMode='rotate'; cam.vT=cam.vP=0; } lastPinch=null; };
+canvas.addEventListener('pointerup',endPtr); canvas.addEventListener('pointercancel',endPtr);
+canvas.addEventListener('wheel',e=>{ e.preventDefault(); poke();
+  const dy=e.deltaMode===1? e.deltaY*16 : e.deltaY;
+  zoomAt(Math.exp(dy*(e.ctrlKey?0.01:0.0015)), e.clientX, e.clientY);
+},{passive:false});
+canvas.addEventListener('dblclick',()=>setView('reset'));
+let spaceDown=false;
+addEventListener('keydown',e=>{
+  if(/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+  const step=40; let used=true;
+  if(e.key===' '){ spaceDown=true; }
+  else if(e.key==='ArrowLeft') panBy(step,0); else if(e.key==='ArrowRight') panBy(-step,0);
+  else if(e.key==='ArrowUp') panBy(0,step); else if(e.key==='ArrowDown') panBy(0,-step);
+  else if(e.key==='+'||e.key==='=') zoomAt(0.85); else if(e.key==='-'||e.key==='_') zoomAt(1/0.85);
+  else if(e.key==='r'||e.key==='R') setView('reset');
+  else used=false;
+  if(used){ e.preventDefault(); poke(); }
+});
+addEventListener('keyup',e=>{ if(e.key===' ') spaceDown=false; });
+let tween=null;
+function setView(v,instant){
+  if(!view) return; const {E,T}=view.extent, size=Math.max(2*E+1,T);
+  const fov=THREE.MathUtils.degToRad(camera.fov), aspect=camera.aspect||1;
+  const fitH=T/2/Math.tan(fov/2)*1.08, fitW=(2*E+1)/2/Math.tan(fov/2)/aspect*1.35;
+  const goal={theta:cam.theta, phi:cam.phi, dist:Math.max(fitH,fitW, 8)+E, target:new THREE.Vector3()};
+  cam.home=Math.max(size*2.2,40);
+  if(v==='reset'||v==='iso'){ goal.theta=0.8; goal.phi=1.12; }
+  if(v==='side'){ goal.phi=Math.PI/2; goal.theta=Math.PI/2; }
+  if(v==='top'){ goal.phi=0.02; goal.dist=Math.max((2*E+1)/Math.tan(fov/2)*0.75, 10)+T/2; }
+  if(v==='bottom'){ goal.phi=Math.PI-0.02; goal.dist=Math.max((2*E+1)/Math.tan(fov/2)*0.75, 10)+T/2; }
+  cam.vT=cam.vP=0; cam.pan.set(0,0,0); poke();
+  // pick the shortest way round
+  while(goal.theta-cam.theta>Math.PI) goal.theta-=2*Math.PI; while(cam.theta-goal.theta>Math.PI) goal.theta+=2*Math.PI;
+  if(instant){ cam.theta=goal.theta; cam.phi=goal.phi; cam.dist=goal.dist; cam.target.copy(goal.target); tween=null; }
+  else tween={from:{theta:cam.theta,phi:cam.phi,dist:cam.dist,target:cam.target.clone()}, to:goal, t0:performance.now()};
+}
+document.querySelectorAll('.vbtns button').forEach(b=>b.onclick=()=>setView(b.dataset.v));
+
+function resize(){ const r=canvas.parentElement.getBoundingClientRect(); renderer.setSize(r.width,r.height,false); camera.aspect=r.width/Math.max(1,r.height); camera.updateProjectionMatrix(); }
+addEventListener('resize',resize); new ResizeObserver(resize).observe($('stage'));
+let growing=null;
+$('grow').onclick=()=>{ if(!mesh) return; growing={t:0,last:0}; mesh.count=0; };
+$('copy').onclick=async()=>{ if(!view) return; try{ await navigator.clipboard.writeText(JSON.stringify({colors:K, space:'D4-symmetric von Neumann', rule:Array.from(view.rule).join('')})); $('copy').textContent='Copied'; }catch{ $('copy').textContent='Copy failed'; } setTimeout(()=>$('copy').textContent='Copy rule',1200); };
+
+function loop(now){
+  requestAnimationFrame(loop);
+  if(growing&&mesh){ if(now-growing.last>30){ growing.last=now; growing.t++; mesh.count=layerEnds[Math.min(growing.t,layerEnds.length-1)]||0; if(growing.t>=layerEnds.length-1) growing=null; } }
+  if(tween){ const k=Math.min(1,(now-tween.t0)/450), e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2, a=tween.from, b=tween.to;
+    cam.theta=a.theta+(b.theta-a.theta)*e; cam.phi=a.phi+(b.phi-a.phi)*e; cam.dist=a.dist+(b.dist-a.dist)*e; cam.target.lerpVectors(a.target,b.target,e); if(k>=1) tween=null; }
+  else if(!dragMode){ // inertia
+    if(Math.abs(cam.vT)>1e-4||Math.abs(cam.vP)>1e-4){ cam.theta+=cam.vT; cam.phi=Math.min(Math.PI-0.02,Math.max(0.02,cam.phi+cam.vP)); cam.vT*=0.9; cam.vP*=0.9; }
+    if(cam.pan.lengthSq()>0.01){ panBy(cam.pan.x,cam.pan.y); cam.pan.multiplyScalar(0.85); }
+    if($('spin').checked && now-idleAt>3500) cam.theta+=0.0015;
+  }
+  const {off}=camBasis();
+  camera.position.copy(cam.target).addScaledVector(off,cam.dist); camera.lookAt(cam.target);
+  renderer.render(scene,camera);
+}
+
+/* ================= substructure analysis ================= */
+const anaSrc = CORE_SRC + `
+const G={}; core(G);
+onmessage=({data:m})=>{
+  const sp=G.makeSpace(m.K), s=m.s, r=(s-1)/2, K=m.K, P=G.patchPerms(s), n=s*s;
+  const motifs=new Map(); let ncol=m.rules.length, patches=0;
+  const caseUse=[]; const p=new Uint8Array(n);
+  for(let j=0;j<m.rules.length;j++){
+    const res=sp.simulate(Uint8Array.from(m.rules[j]), m.maxSteps, {layers:true, usage:true});
+    const layers=res.layers, T=layers.length;
+    if(m.mode==='time') ncol=Math.min(T,40);
+    else { const u=[]; for(let i=1;i<sp.NC;i++) if(res.usage[i]) u.push(i); caseUse.push(u); }
+    const occ=(L,x,y)=>{ const ax=x<0?-x:x, ay=y<0?-y:y; return (ax>L.ext||ay>L.ext)?0:L.q[ay*(L.ext+1)+ax]; };
+    for(let t=0;t<T;t++){
+      const L=layers[t], e=L.ext, col= m.mode==='time'? Math.min(ncol-1,Math.floor(t*ncol/T)) : j;
+      for(let y=0;y<=e;y++) for(let x=0;x<=e;x++){
+        if(!L.q[y*(e+1)+x]) continue;
+        let nw=0, k=0;
+        for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++){ const v=occ(L,x+dx,y+dy); p[k++]=v; if(v) nw++; }
+        if(nw<m.minNW) continue;
+        const key=G.canonKey(p,s,K,P), w=(x?2:1)*(y?2:1);   // quadrant → full-plane weight
+        let rec=motifs.get(key);
+        if(!rec){ rec={tot:0, cols:new Float32Array(m.mode==='time'?40:ncol), ex:p.slice()}; motifs.set(key,rec); }
+        rec.tot+=w; rec.cols[col]+=w; patches+=w;
+      }
+    }
+    postMessage({type:'progress', f:(j+1)/m.rules.length});
+  }
+  const arr=[];
+  for(const [key,rec] of motifs){ let pres=0, first=-1; for(let c=0;c<ncol;c++) if(rec.cols[c]>0){ pres++; if(first<0) first=c; } arr.push({key,tot:rec.tot,pres,first,cols:Array.from(rec.cols.slice(0,ncol)),ex:Array.from(rec.ex)}); }
+  arr.sort((a,b)=>b.pres-a.pres||b.tot-a.tot);
+  postMessage({type:'done', top:arr.slice(0,m.top), distinct:arr.length, patches, ncol, caseUse,
+    everywhere: arr.filter(a=>a.pres===ncol).length});
+};`;
+const anaURL = URL.createObjectURL(new Blob([anaSrc],{type:'text/javascript'}));
+let ana=null, anaWorker=null;
+
+function openAna(open){ $('app').classList.toggle('ana',open); $('anaToggle').textContent=open?'← Close analysis':'Analyze substructures →'; setTimeout(resize,0); }
+$('anaToggle').onclick=()=>openAna(!$('app').classList.contains('ana'));
+
+$('aRun').onclick=()=>{
+  const mode=$('aMode').value, s=+$('aS').value, minNW=Math.max(1,+$('aMin').value|0), top=Math.max(5,Math.min(80,+$('aTop').value|0));
+  let cols=[], labels=[];
+  if(mode==='time'){ if(!view) return; cols=[view.rule]; }
+  else if(mode==='lineage'){ const L=lineages[selected]; if(!L){ $('aSum').textContent='Evolve a population first (or use "Time steps").'; return; }
+    const list=L.imps.slice(1); const pick=list.length>40? list.filter((_,i)=>i%Math.ceil(list.length/40)===0||i===list.length-1):list;
+    cols=pick.map(x=>x.rule); labels=pick.map(x=>`mutation ${x.i} · fitness ${fmt(x.f)}`); }
+  else { if(!lineages.length){ $('aSum').textContent='Evolve a population first.'; return; }
+    cols=lineages.map(L=>L.rule); labels=lineages.map((L,k)=>`lineage ${k+1} · fitness ${fmt(L.fit)}`); }
+  if(!cols.length){ $('aSum').textContent='Nothing to analyze yet.'; return; }
+  anaWorker?.terminate(); anaWorker=new Worker(anaURL);
+  if(highlight){ highlight=null; recolor(); drawXS(); showHL(); }
+  $('aRun').disabled=true; $('aBar').style.width='0%'; $('aSum').textContent='Analyzing…';
+  const meta={mode,s,K,rules:cols.map(r=>Uint8Array.from(r)),labels, viewTitle:view&&view.title, life: view&&view.res.life};
+  anaWorker.onmessage=({data:d})=>{
+    if(d.type==='progress'){ $('aBar').style.width=(d.f*100)+'%'; return; }
+    $('aRun').disabled=false; $('aBar').style.width='100%';
+    ana={...meta, ...d};
+    if(mode==='time'){ const T=view.res.layers.length; ana.labels=[...Array(d.ncol)].map((_,c)=>{ const a=Math.floor(c*T/d.ncol), b=Math.floor((c+1)*T/d.ncol)-1; return a===b?`step ${a}`:`steps ${a}–${b}`; }); }
+    drawAnalysis();
+  };
+  anaWorker.postMessage({mode,s,K,minNW,top,maxSteps:curMax(),rules:cols.map(r=>Array.from(r))});
+};
+
+const HM={left:0,cw:0,rh:0,top:0,rows:0};
+function drawAnalysis(){
+  if(!ana) return;
+  const what={lineage:'generations',time:'time bins',pop:'lineages'}[ana.mode];
+  $('aSum').innerHTML=`${ana.distinct.toLocaleString()} distinct ${ana.s}×${ana.s} motifs · ${Math.round(ana.patches).toLocaleString()} patches · <b>${ana.everywhere}</b> motifs present in all ${ana.ncol} ${what}`;
+  $('aColLbl').textContent=`${ana.ncol} ${what}`;
+  const cv=$('aHeat'), ctx=cv.getContext('2d'), dpr=2, W=876;
+  const rows=ana.top.length, rh=34, thumb=rh-4, left=8+thumb+8+52, top=18;
+  const cw=Math.max(2,(W-left-8)/ana.ncol);
+  const H=top+rows*rh+8; cv.height=H; cv.style.height=(H/dpr)+'px';
+  Object.assign(HM,{left,cw,rh,top,rows});
+  ctx.clearRect(0,0,W,H); ctx.font='18px system-ui'; ctx.fillStyle='#999';
+
+  ana.top.forEach((m,i)=>{
+    const y=top+i*rh, s=ana.s, ps=thumb/s;
+    if(highlight&&highlight.key===m.key){ ctx.fillStyle='#fff6dd'; ctx.fillRect(0,y,W,rh); }
+    for(let a=0;a<s;a++) for(let b=0;b<s;b++){ const v=m.ex[a*s+b]; ctx.fillStyle=v?PAL[v]:'#f3f3f3'; ctx.fillRect(8+b*ps,y+2+a*ps,ps-0.6,ps-0.6); }
+    ctx.fillStyle='#666'; ctx.fillText(`${m.pres}/${ana.ncol}`,8+thumb+10,y+rh*0.72);
+    const mx=Math.max(...m.cols);
+    for(let c=0;c<ana.ncol;c++){ const v=m.cols[c]; ctx.fillStyle=v? `rgba(30,30,30,${0.12+0.88*Math.log1p(v)/Math.log1p(mx)})` : '#f6f6f6'; ctx.fillRect(left+c*cw,y+2,Math.max(1,cw-1),rh-4); }
+    if(m.first>=0){ ctx.fillStyle='#d8433c'; ctx.fillRect(left+m.first*cw,y+rh-3,Math.max(2,cw-1),2); }
+  });
+  drawCases();
+}
+function drawCases(){
+  const sec=$('caseSec'); if(ana.mode==='time'){ sec.style.display='none'; return; } sec.style.display='block';
+  const cu=ana.caseUse, n=cu.length, first=new Map();
+  cu.forEach((u,c)=>u.forEach(id=>{ if(!first.has(id)) first.set(id,c); }));
+  const ids=[...first.keys()].sort((a,b)=>first.get(a)-first.get(b)||a-b);
+  const sets=cu.map(u=>new Set(u)), rules=ana.rules;
+  let conserved=0; for(const id of ids){ let ok=true; for(let c=first.get(id);c<n;c++) if(!sets[c].has(id)){ok=false;break;} if(ok) conserved++; }
+  $('cSum').textContent=`${ids.length} cases ever used · final uses ${cu[n-1].length} of ${SP.NC} · ${conserved} kept every column since first use`;
+  const cv=$('cHeat'), ctx=cv.getContext('2d'), W=876, left=8, cw=(W-left-8)/n, rh=ids.length>150?3:ids.length>60?5:8, H=ids.length*rh+8;
+  cv.height=Math.max(20,H); cv.style.height=(Math.max(20,H)/2)+'px'; ctx.clearRect(0,0,W,cv.height);
+  ids.forEach((id,r)=>{ for(let c=0;c<n;c++){ const y=4+r*rh; if(sets[c].has(id)){ const v=rules[c][id]; ctx.fillStyle=v?PAL[v]:'#9a9a9a'; } else ctx.fillStyle='#f6f6f6'; ctx.fillRect(left+c*cw,y,Math.max(1,cw-1),rh-1); } });
+}
+// heatmap interaction
+const tip=$('tip');
+$('aHeat').addEventListener('mousemove',e=>{
+  if(!ana) return; const r=e.target.getBoundingClientRect(), x=(e.clientX-r.left)*2, y=(e.clientY-r.top)*2;
+  const row=Math.floor((y-HM.top)/HM.rh), col=Math.floor((x-HM.left)/HM.cw);
+  if(row<0||row>=HM.rows){ tip.style.display='none'; return; }
+  const m=ana.top[row]; let txt=`motif #${row+1} · total ${Math.round(m.tot).toLocaleString()} · in ${m.pres}/${ana.ncol}`;
+  if(col>=0&&col<ana.ncol) txt+=` · ${ana.labels[col]||''}: ${Math.round(m.cols[col]).toLocaleString()}`;
+  tip.textContent=txt; tip.style.display='block'; tip.style.left=(e.clientX+12)+'px'; tip.style.top=(e.clientY+12)+'px';
+});
+$('aHeat').addEventListener('mouseleave',()=>tip.style.display='none');
+$('aHeat').addEventListener('click',e=>{
+  if(!ana) return; const r=e.target.getBoundingClientRect(), x=(e.clientX-r.left)*2, y=(e.clientY-r.top)*2;
+  const row=Math.floor((y-HM.top)/HM.rh), col=Math.floor((x-HM.left)/HM.cw); if(row<0||row>=HM.rows) return;
+  const m=ana.top[row];
+  highlight={key:m.key, s:ana.s, idx:row};
+  if(col>=0&&col<ana.ncol&&ana.mode!=='time'){ pinned=true; showRule(ana.rules[col], ana.mode==='pop'?`Lineage ${col+1} · latest`:`Lineage ${selected+1} · ${ana.labels[col]}`, -1, true); }
+  else { computeMarks(); recolor(); drawXS(); }
+  drawAnalysis(); showHL();
+});
+function computeMarks(){
+  const {key,s}=highlight, r=(s-1)/2, P=G.patchPerms(s), layers=view.res.layers, occ=occFn(layers), p=new Uint8Array(s*s), marks=new Set();
+  let hits=0;
+  for(let t=0;t<layers.length;t++){ const e=layers[t].ext;
+    for(let y=-e;y<=e;y++) for(let x=-e;x<=e;x++){
+      if(!occ(t,x,y)) continue; let k=0;
+      for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++) p[k++]=occ(t,x+dx,y+dy);
+      if(G.canonKey(p,s,K,P)!==key) continue; hits++;
+      for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++) if(occ(t,x+dx,y+dy)) marks.add(mkey(t,x+dx,y+dy));
+    }}
+  highlight.marks=marks; highlight.hits=hits;
+}
+function showHL(){
+  const el=$('hl'); if(!highlight){ el.style.display='none'; return; }
+  el.style.display='block'; el.innerHTML=`Highlighting motif #${highlight.idx+1}: ${highlight.hits.toLocaleString()} occurrences in this organism <button id="hlx">clear</button>`;
+  $('hlx').onclick=()=>{ highlight=null; recolor(); drawXS(); showHL(); drawAnalysis(); };
+}
+const _show=showRule; showRule=function(...a){ _show(...a); if(highlight){ recolor(); drawXS(); showHL(); } };
+
+/* ================= controls ================= */
+function setK(k){
+  K=k; SP=G.makeSpace(K); $('ncDisp').value=SP.NC;
+  $('budget').value=Math.max(3000, Math.round(SP.NC*8/1000)*1000);
+  buildPalUI(); highlight=null; showHL();
+}
+$('K').onchange=e=>{
+  for(const L of lineages) L.worker?.terminate(); lineages=[]; running=0; params=null; setRunning(false);
+  setK(+e.target.value); buildPopCards(); buildLinStrip(); drawChart(); ana=null; $('aSum').textContent='';
+  if(K===5) loadDemo(); else { const r=new Uint8Array(SP.NC); showRule(r,`${K} colors · null rule · press "Evolve new"`); }
+};
+const syncLabels=()=>{ $('maxV').textContent='· '+$('maxSteps').value; const pw=+$('pw').value; $('pwV').textContent='· '+pw.toFixed(2);
+  const uni=1/(K-1); $('pwNote').textContent=`${uni.toFixed(2)} ≈ uniform over the ${K-1} other colors (Wolfram's procedure). Uniform mutations in 2D let unused cases drift into explosive rules, so lineages stall; leaning toward white helps.`;
+  $('colorPick').style.display=$('ftype').value==='color'?'block':'none'; };
+['maxSteps','pw','ftype','K'].forEach(id=>$(id).addEventListener('input',syncLabels));
+
+function loadDemo(){
+  // pre-evolved 5-color rule (lifetime fitness)
+  showRule(Uint8Array.from('030004203300003403201400001413014010100203001201134004310000000224122010104001014141000313013002040441000140200100423304412000030020004432030040001023440400000101200000100000140022130411002003101003040003201000400000413032334120100104240304320000310102030002040202001030402040001200400001404020004010400040404303144013241104003042400013100400200300302113304000030112400140303000430421040040021002103040020000113001034003100240101030200300410110004303212034330030040002330130310040044000004320131010401042020004011020104403104422104002103404303300200403030032303020220301040131020240033200400024000304'.split('').map(Number)), 'Demo organism · press "Evolve new" to grow your own population');
+}
+setK(5); syncLabels(); resize(); drawChart(); loadDemo();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
