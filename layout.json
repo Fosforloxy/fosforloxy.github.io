@@ -1,0 +1,188 @@
+{
+ "v": 2,
+ "portrait": {
+  "v": 1,
+  "aspect": "portrait",
+  "seed": 2026,
+  "palette": "code_rgb (mustard/red/navy)",
+  "frame": "knotwork",
+  "trim": "shadow",
+  "tree": {
+   "split": "v",
+   "r": 0.5,
+   "a": {
+    "split": "h",
+    "r": 0.5,
+    "a": {
+     "scene": "calab",
+     "ws": 378279937
+    },
+    "b": {
+     "scene": "city",
+     "ws": 557548336
+    }
+   },
+   "b": {
+    "split": "v",
+    "r": 0.5,
+    "a": {
+     "split": "h",
+     "r": 0.5,
+     "a": {
+      "split": "v",
+      "r": 0.3346,
+      "a": {
+       "scene": "pathfind",
+       "ws": 266690902
+      },
+      "b": {
+       "scene": "midjourney",
+       "img": 7,
+       "ws": 11380709
+      }
+     },
+     "b": {
+      "split": "h",
+      "r": 0.5,
+      "a": {
+       "split": "v",
+       "r": 0.5,
+       "a": {
+        "split": "v",
+        "r": 0.5,
+        "a": {
+         "scene": "squigs",
+         "ws": 983042206
+        },
+        "b": {
+         "scene": "ship",
+         "ws": 101192801
+        }
+       },
+       "b": {
+        "scene": "elementary",
+        "ws": 578547902
+       }
+      },
+      "b": {
+       "scene": "worlds",
+       "ws": 825883551
+      }
+     }
+    },
+    "b": {
+     "split": "h",
+     "r": 0.5,
+     "a": {
+      "scene": "flags",
+      "ws": 780608471
+     },
+     "b": {
+      "scene": "wavefields",
+      "ws": 419734353
+     }
+    }
+   }
+  }
+ },
+ "landscape": {
+  "v": 1,
+  "aspect": "landscape",
+  "seed": 17228,
+  "palette": "code_rgb (mustard/red/navy)",
+  "frame": "knotwork",
+  "trim": "shadow",
+  "tree": {
+   "split": "v",
+   "r": 0.5,
+   "a": {
+    "split": "v",
+    "r": 0.5,
+    "a": {
+     "split": "h",
+     "r": 0.5,
+     "a": {
+      "split": "h",
+      "r": 0.7039,
+      "a": {
+       "scene": "dice",
+       "ws": 437896766
+      },
+      "b": {
+       "scene": "wavefields",
+       "ws": 93045064
+      }
+     },
+     "b": {
+      "split": "h",
+      "r": 0.5,
+      "a": {
+       "scene": "terrainfly",
+       "ws": 413733400
+      },
+      "b": {
+       "scene": "city",
+       "ws": 925228862
+      }
+     }
+    },
+    "b": {
+     "split": "v",
+     "r": 0.5,
+     "a": {
+      "scene": "grid2",
+      "ws": 708883939
+     },
+     "b": {
+      "split": "h",
+      "r": 0.5,
+      "a": {
+       "scene": "squigs",
+       "ws": 24053431
+      },
+      "b": {
+       "scene": "flags",
+       "ws": 115171575
+      }
+     }
+    }
+   },
+   "b": {
+    "split": "v",
+    "r": 0.5,
+    "a": {
+     "split": "h",
+     "r": 0.5,
+     "a": {
+      "scene": "pixelfields",
+      "ws": 22826406
+     },
+     "b": {
+      "scene": "worlds",
+      "ws": 890497466
+     }
+    },
+    "b": {
+     "split": "h",
+     "r": 0.5,
+     "a": {
+      "scene": "dotsboxes",
+      "ws": 280285638
+     },
+     "b": {
+      "split": "v",
+      "r": 0.5,
+      "a": {
+       "scene": "pathfind",
+       "ws": 944122734
+      },
+      "b": {
+       "scene": "calab",
+       "ws": 146767550
+      }
+     }
+    }
+   }
+  }
+ }
+}
