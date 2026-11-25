@@ -8,78 +8,102 @@
   "frame": "knotwork",
   "trim": "shadow",
   "tree": {
-   "split": "v",
-   "r": 0.5,
+   "split": "h",
+   "r": 0.81,
    "a": {
-    "split": "h",
-    "r": 0.5,
-    "a": {
-     "scene": "calab",
-     "ws": 378279937
-    },
-    "b": {
-     "scene": "city",
-     "ws": 557548336
-    }
-   },
-   "b": {
     "split": "v",
     "r": 0.5,
     "a": {
      "split": "h",
      "r": 0.5,
      "a": {
-      "split": "v",
-      "r": 0.3346,
+      "scene": "calab",
+      "ws": 378279937
+     },
+     "b": {
+      "scene": "city",
+      "ws": 557548336
+     }
+    },
+    "b": {
+     "split": "v",
+     "r": 0.5,
+     "a": {
+      "split": "h",
+      "r": 0.5,
       "a": {
-       "scene": "pathfind",
-       "ws": 266690902
+       "split": "v",
+       "r": 0.3346,
+       "a": {
+        "scene": "pathfind",
+        "ws": 266690902
+       },
+       "b": {
+        "scene": "midjourney",
+        "img": 7,
+        "ws": 11380709
+       }
       },
       "b": {
-       "scene": "midjourney",
-       "img": 7,
-       "ws": 11380709
+       "split": "h",
+       "r": 0.5,
+       "a": {
+        "split": "v",
+        "r": 0.5,
+        "a": {
+         "split": "v",
+         "r": 0.5,
+         "a": {
+          "scene": "squigs",
+          "ws": 983042206
+         },
+         "b": {
+          "scene": "ship",
+          "ws": 101192801
+         }
+        },
+        "b": {
+         "scene": "elementary",
+         "ws": 578547902
+        }
+       },
+       "b": {
+        "scene": "worlds",
+        "ws": 825883551
+       }
       }
      },
      "b": {
       "split": "h",
       "r": 0.5,
       "a": {
-       "split": "v",
-       "r": 0.5,
-       "a": {
-        "split": "v",
-        "r": 0.5,
-        "a": {
-         "scene": "squigs",
-         "ws": 983042206
-        },
-        "b": {
-         "scene": "ship",
-         "ws": 101192801
-        }
-       },
-       "b": {
-        "scene": "elementary",
-        "ws": 578547902
-       }
+       "scene": "flags",
+       "ws": 780608471
       },
       "b": {
-       "scene": "worlds",
-       "ws": 825883551
+       "scene": "wavefields",
+       "ws": 419734353
       }
      }
+    }
+   },
+   "b": {
+    "split": "v",
+    "r": 0.4,
+    "a": {
+     "scene": "rulio3d",
+     "ws": 31337
     },
     "b": {
-     "split": "h",
-     "r": 0.5,
+     "split": "v",
+     "r": 0.55,
      "a": {
-      "scene": "flags",
-      "ws": 780608471
+      "scene": "rulio1d",
+      "ws": 4242
      },
      "b": {
-      "scene": "wavefields",
-      "ws": 419734353
+      "scene": "rulio2d",
+      "ws": 2718
      }
     }
    }
@@ -94,35 +118,59 @@
   "trim": "shadow",
   "tree": {
    "split": "v",
-   "r": 0.5,
+   "r": 0.8,
    "a": {
     "split": "v",
     "r": 0.5,
     "a": {
-     "split": "h",
+     "split": "v",
      "r": 0.5,
      "a": {
       "split": "h",
-      "r": 0.7039,
+      "r": 0.5,
       "a": {
-       "scene": "dice",
-       "ws": 437896766
+       "split": "h",
+       "r": 0.7039,
+       "a": {
+        "scene": "dice",
+        "ws": 437896766
+       },
+       "b": {
+        "scene": "wavefields",
+        "ws": 93045064
+       }
       },
       "b": {
-       "scene": "wavefields",
-       "ws": 93045064
+       "split": "h",
+       "r": 0.5,
+       "a": {
+        "scene": "terrainfly",
+        "ws": 413733400
+       },
+       "b": {
+        "scene": "city",
+        "ws": 925228862
+       }
       }
      },
      "b": {
-      "split": "h",
+      "split": "v",
       "r": 0.5,
       "a": {
-       "scene": "terrainfly",
-       "ws": 413733400
+       "scene": "grid2",
+       "ws": 708883939
       },
       "b": {
-       "scene": "city",
-       "ws": 925228862
+       "split": "h",
+       "r": 0.5,
+       "a": {
+        "scene": "squigs",
+        "ws": 24053431
+       },
+       "b": {
+        "scene": "flags",
+        "ws": 115171575
+       }
       }
      }
     },
@@ -130,56 +178,56 @@
      "split": "v",
      "r": 0.5,
      "a": {
-      "scene": "grid2",
-      "ws": 708883939
+      "split": "h",
+      "r": 0.5,
+      "a": {
+       "scene": "pixelfields",
+       "ws": 22826406
+      },
+      "b": {
+       "scene": "worlds",
+       "ws": 890497466
+      }
      },
      "b": {
       "split": "h",
       "r": 0.5,
       "a": {
-       "scene": "squigs",
-       "ws": 24053431
+       "scene": "dotsboxes",
+       "ws": 280285638
       },
       "b": {
-       "scene": "flags",
-       "ws": 115171575
+       "split": "v",
+       "r": 0.5,
+       "a": {
+        "scene": "pathfind",
+        "ws": 944122734
+       },
+       "b": {
+        "scene": "calab",
+        "ws": 146767550
+       }
       }
      }
     }
    },
    "b": {
-    "split": "v",
-    "r": 0.5,
+    "split": "h",
+    "r": 0.4,
     "a": {
-     "split": "h",
-     "r": 0.5,
-     "a": {
-      "scene": "pixelfields",
-      "ws": 22826406
-     },
-     "b": {
-      "scene": "worlds",
-      "ws": 890497466
-     }
+     "scene": "rulio3d",
+     "ws": 31337
     },
     "b": {
      "split": "h",
      "r": 0.5,
      "a": {
-      "scene": "dotsboxes",
-      "ws": 280285638
+      "scene": "rulio1d",
+      "ws": 4242
      },
      "b": {
-      "split": "v",
-      "r": 0.5,
-      "a": {
-       "scene": "pathfind",
-       "ws": 944122734
-      },
-      "b": {
-       "scene": "calab",
-       "ws": 146767550
-      }
+      "scene": "rulio2d",
+      "ws": 2718
      }
     }
    }
