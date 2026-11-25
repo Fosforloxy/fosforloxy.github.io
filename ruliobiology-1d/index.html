@@ -129,6 +129,9 @@
   <div class="pal" id="pal"></div>
   <div class="row" style="margin-top:6px"><button id="palReset">Reset colors</button></div>
 
+  <h2>Starting cells</h2>
+  <div id="seedsUI"></div>
+
   <h2>View</h2>
   <div class="check"><input type="checkbox" id="grid"><label for="grid">Cell grid when zoomed in</label></div>
   <div class="check"><input type="checkbox" id="autogrow" checked><label for="autogrow">Grow each organism from its seed when shown</label></div>
@@ -205,7 +208,36 @@ function makeSpace(K,sym){ const key=K+(sym?'s':'a'); if(spaces[key]) return spa
     }
     return {life, status, period, maxWidth:maxW, cells, cc, usage, rows, left:minLo-c0, right:maxHi-c0};
   }
-  return spaces[key]={K,sym,NC,CM,CEN,CASE,simulate};
+    // several starting cells, each [x, 0, 0, delay, state]; rows also carry one lineage bit per cell
+  let MW=0, MA=null, MB=null, MS=null, TA=null, TB=null;
+  function simulateMulti(rule,seeds,maxSteps,opt){ opt=opt||{};
+    let span=0, lastD=0; for(const q of seeds){ span=Math.max(span,Math.abs(q[0])); lastD=Math.max(lastD,q[3]||0); }
+    const need=2*(maxSteps+span)+9; if(MW!==need){ MW=need; MA=new Uint8Array(MW); MB=new Uint8Array(MW); MS=new Uint8Array(MW); TA=new Uint8Array(MW); TB=new Uint8Array(MW); } else { MA.fill(0); MB.fill(0); MS.fill(0); TA.fill(0); TB.fill(0); }
+    const usage=opt.usage?new Uint8Array(NC):null, rows=opt.rows?[]:null, cc=new Float64Array(K), tags=!!opt.tags;
+    const grows=(E)=>{ const g=new Uint8Array(K); for(let a=1;a<K;a++){ let x=a, ok=1; for(let j=0;j<=K;j++){ x=rule[E[x]]; if(!x){ ok=0; break; } } g[a]=ok; } return g; }, immR=grows(RIGHT), immL=sym?immR:grows(LEFT);
+    const c0=MW>>1; let a=MA, b=MB, ta=TA, tb=TB, lo=MW, hi=-1, cells=0, maxW=1, minLo=MW, maxHi=-1, life=0, status=1, period=0;
+    const put=t=>seeds.forEach((q,i)=>{ if((q[3]||0)!==t) return; const x=c0+q[0]; a[x]=q[4]||1; ta[x]=1<<i; cells++; cc[q[4]||1]++; if(x<lo)lo=x; if(x>hi)hi=x; });
+    put(0); if(hi<0){ lo=hi=c0+seeds[0][0]; }
+    const snap=()=>{ if(lo<minLo)minLo=lo; if(hi>maxHi)maxHi=hi; if(rows) rows.push({lo:lo-c0,d:a.slice(lo,hi+1),tg:tags?ta.slice(lo,hi+1):null}); };
+    snap(); let blo=lo, bhi=hi, sLo=-1, sHi=-1, power=1, lam=0;
+    for(let t=1;t<=maxSteps;t++){
+      if(t>lastD&&(immL[a[lo]]||immR[a[hi]])){ status=2; break; }
+      b.fill(0,blo,bhi+1); if(tags) tb.fill(0,blo,bhi+1); let nlo=MW, nhi=-1;
+      for(let x=lo-1;x<=hi+1;x++){ const li=(a[x-1]*K+a[x])*K+a[x+1]; if(!li){ b[x]=0; continue; } const ci=CM[li], v=rule[ci]; b[x]=v; if(usage) usage[ci]=1;
+        if(v){ cells++; cc[v]++; if(x<nlo) nlo=x; if(x>nhi) nhi=x; if(tags) tb[x]=(a[x-1]?ta[x-1]:0)|(a[x]?ta[x]:0)|(a[x+1]?ta[x+1]:0); } }
+      let T=a; a=b; b=T; T=ta; ta=tb; tb=T; blo=lo-1; bhi=hi+1;
+      if(nhi<0&&t>lastD){ life=t; status=0; if(rows) rows.push({lo:0,d:new Uint8Array(0),tg:null,dead:true}); break; }
+      if(nhi<0){ nlo=nhi=lo; }
+      lo=nlo; hi=nhi; if(t<=lastD) put(t);
+      if(hi-lo+1>maxW) maxW=hi-lo+1;
+      if(lo<2||hi>MW-3){ status=1; break; }
+      snap();
+      if(t>lastD){ if(lo===sLo&&hi===sHi){ let same=true; for(let x=lo;x<=hi;x++) if(a[x]!==MS[x]){ same=false; break; } if(same){ status=3; period=lam+1; break; } }
+        if(++lam>=power||sLo<0){ if(sLo>=0) MS.fill(0,sLo,sHi+1); for(let x=lo;x<=hi;x++) MS[x]=a[x]; sLo=lo; sHi=hi; if(lam>=power) power*=2; lam=0; } }
+    }
+    return {life, status, period, maxWidth:maxW, cells, cc, usage, rows, left:minLo-c0, right:maxHi-c0, multi:true};
+  }
+  return spaces[key]={K,sym,NC,CM,CEN,CASE,simulate,simulateMulti};
 }
 
 /* ---------- fitness ---------- */
@@ -228,13 +260,15 @@ let PAL=DEFAULT_PAL.slice();
 let lineages=[], selected=0, running=false, shown=null, step=0, params=null;
 const RGB=()=>PAL.map(h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
 const dispCut=()=>+$('maxSteps').value;
+let SEEDS=null; const evoSeeds=()=>params&&params.seeds;
+function simEvo(rule,cut,opt){ const sd=evoSeeds(); return sd?SP.simulateMulti(rule,sd,cut,opt):SP.simulate(rule,cut,opt); }
 
 function buildPalUI(){ const el=$('pal'); el.textContent='';
   for(let c=1;c<K;c++){ const inp=document.createElement('input'); inp.type='color'; inp.value=PAL[c]; inp.setAttribute('aria-label','Color '+c);
     inp.oninput=()=>{ PAL[c]=inp.value; onPalette(); }; el.appendChild(inp); }
   const fc=$('fcolor'); fc.textContent=''; for(let c=1;c<K;c++){ const o=document.createElement('option'); o.value=c; o.textContent='Color '+c; fc.appendChild(o); } }
 function onPalette(){ if(shown){ paintImage(); draw(); drawGenome(); } renderPop(); renderLin(); }
-function setSpace(){ K=+$('K').value; SYM=$('sym').checked; SP=makeSpace(K,SYM); $('ncDisp').value=SP.NC; buildPalUI(); updPw(); }
+function setSpace(){ K=+$('K').value; SYM=$('sym').checked; SP=makeSpace(K,SYM); $('ncDisp').value=SP.NC; buildPalUI(); updPw(); if(SEEDS) SEEDS.setK(K); }
 function updPw(){ const pw=+$('pw').value, uni=1/(K-1); $('pwV').textContent=pw.toFixed(2);
   $('pwNote').textContent=`${uni.toFixed(2)} ≈ uniform over the ${K-1} other colors. Higher values favour mutations that switch a case off, which keeps unused cases from drifting into explosive rules.`; }
 
@@ -243,8 +277,10 @@ const img=document.createElement('canvas'); // one pixel per cell per step
 function paintImage(){ const res=shown.res, rows=res.rows, w=res.right-res.left+1, h=rows.length; img.width=Math.max(1,w); img.height=Math.max(1,h);
   const ctx=img.getContext('2d'), im=ctx.createImageData(img.width,img.height), d=im.data, rgb=RGB();
   for(let i=0;i<d.length;i+=4){ d[i]=d[i+1]=d[i+2]=255; d[i+3]=255; }
-  rows.forEach((r,y)=>{ for(let k=0;k<r.d.length;k++){ const v=r.d[k]; if(!v) continue; const x=r.lo+k-res.left, o=(y*img.width+x)*4; const c=rgb[v]; d[o]=c[0]; d[o+1]=c[1]; d[o+2]=c[2]; } });
+  const byLin=SEEDS&&SEEDS.lineage()&&res.multi, LR=byLin?linColors().map(h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]):null;
+  rows.forEach((r,y)=>{ for(let k=0;k<r.d.length;k++){ const v=r.d[k]; if(!v) continue; const x=r.lo+k-res.left, o=(y*img.width+x)*4; const c=byLin&&r.tg?LR[r.tg[k]]||LR[0]:rgb[v]; d[o]=c[0]; d[o+1]=c[1]; d[o+2]=c[2]; } });
   ctx.putImageData(im,0,0); }
+function linColors(){ const L=SEEDS.list(), out=['#4a4a4a']; for(let b=1;b<32;b++){ const one=(b&(b-1))===0; out.push(one&&L[Math.log2(b)]?SEEDS.SEEDCOL[L[Math.log2(b)].i]:'#4a4a4a'); } return out; }
 const view={s:1,x:0,y:0,fit:true};
 const st=$('st'), sctx=st.getContext('2d');
 function sizeStage(){ const r=$('stage').getBoundingClientRect(), dpr=Math.min(2,window.devicePixelRatio||1); st.width=Math.round(r.width*dpr); st.height=Math.round(r.height*dpr); st._dpr=dpr; }
@@ -264,10 +300,12 @@ const rowsTotal=()=>shown?shown.res.rows.length:1;
 function setStep(s){ step=Math.max(0,Math.min(rowsTotal()-1,s)); draw(); }
 
 /* ---------- show an organism ---------- */
-function show(rule,label){ const res=SP.simulate(rule,dispCut(),{rows:true,usage:true}); shown={rule:Uint8Array.from(rule),res,label};
+function show(rule,label){ label=label.replace(/ · \d seeds?,.*$/,''); const multi=SEEDS&&SEEDS.active();
+  const res=multi?SP.simulateMulti(rule,SEEDS.packed(),dispCut(),{rows:true,usage:true,tags:true}):SP.simulate(rule,dispCut(),{rows:true,usage:true}); shown={rule:Uint8Array.from(rule),res,label};
   paintImage(); $('t').max=Math.max(1,res.rows.length-1); if(view.fit||!view.s) fitView();
   const used=res.usage.reduce((a,b)=>a+b,0), fate=res.status===0?'dies at step '+res.life:res.status===3?'repeats with period '+res.period:res.status===2?'grows forever':'still alive at the cutoff';
-  $('title2d').textContent=label+' — '+fate; $('stat').textContent=(res.status===0?'lifetime '+res.life:'lifetime ∞')+' · widest '+res.maxWidth+' cells · '+res.cells.toLocaleString()+' cell-steps · '+used+' of '+SP.NC+' cases used';
+  if(multi){ const alone=SP.simulate(rule,dispCut()); $('title2d').textContent=label+' · '+SEEDS.describe()+' — together it '+fate.replace(/^still/,'is still')+' · alone it '+(alone.status===0?'dies at step '+alone.life:'never dies'); }
+  else $('title2d').textContent=label+' — '+fate; $('stat').textContent=(res.status===0?'lifetime '+res.life:'lifetime ∞')+' · widest '+res.maxWidth+' cells · '+res.cells.toLocaleString()+' cell-steps · '+used+' of '+SP.NC+' cases used';
   $('ruleBox').value=Array.from(rule).join(''); drawGenome();
   if($('autogrow').checked&&res.rows.length>2){ step=0; startGrow(); } else setStep(res.rows.length-1); }
 function drawGenome(){ const cv=$('genome'), ctx=cv.getContext('2d'), NC=SP.NC; if(!shown) return;
@@ -289,7 +327,7 @@ $('growBtn').onclick=()=>growing?stopGrow():startGrow();
 $('t').oninput=()=>{ stopGrow(); setStep(+$('t').value); };
 
 /* ---------- strips ---------- */
-function thumb(rule,h){ const res=SP.simulate(rule,dispCut(),{rows:true}), cv=document.createElement('canvas'), w=res.right-res.left+1, rows=res.rows.length;
+function thumb(rule,h){ const res=simEvo(rule,dispCut(),{rows:true}), cv=document.createElement('canvas'), w=res.right-res.left+1, rows=res.rows.length;
   cv.width=Math.max(1,w); cv.height=Math.max(1,rows); const ctx=cv.getContext('2d'), rgb=RGB(), im=ctx.createImageData(cv.width,cv.height), d=im.data;
   for(let i=0;i<d.length;i+=4){ d[i]=d[i+1]=d[i+2]=255; d[i+3]=255; }
   res.rows.forEach((r,y)=>{ for(let k=0;k<r.d.length;k++){ const v=r.d[k]; if(!v) continue; const o=(y*cv.width+r.lo+k-res.left)*4, c=rgb[v]; d[o]=c[0]; d[o+1]=c[1]; d[o+2]=c[2]; } });
@@ -311,16 +349,16 @@ function drawChart(){ const cv=$('chart'), ctx=cv.getContext('2d'), W=cv.width, 
   lineages.forEach((L,k)=>{ if(k!==selected) line(L,'#c9c9c9',2); }); if(lineages[selected]) line(lineages[selected],'#1e1e1e',3); }
 
 /* ---------- evolution: runs in the page, a slice of each frame ---------- */
-function readParams(){ return {K, sym:SYM, type:$('ftype').value, color:+$('fcolor').value||1, maxSteps:+$('maxSteps').value, pw:+$('pw').value, budget:Math.max(100,+$('budget').value|0)}; }
+function readParams(){ return {K, sym:SYM, type:$('ftype').value, color:+$('fcolor').value||1, maxSteps:+$('maxSteps').value, pw:+$('pw').value, budget:Math.max(100,+$('budget').value|0), seeds:SEEDS&&SEEDS.evolve()?SEEDS.packed():null}; }
 function mutate(rule,p){ const r=Uint8Array.from(rule), i=1+Math.floor(Math.random()*(SP.NC-1)), cur=r[i];
   if(cur&&Math.random()<p.pw){ r[i]=0; return r; }
   const opts=[]; for(let v=0;v<K;v++) if(v!==cur&&!(cur&&v===0&&p.pw>0)) opts.push(v); r[i]=opts.length?opts[Math.floor(Math.random()*opts.length)]:0; return r; }
-function newLineage(p){ const rule=new Uint8Array(SP.NC); const f=fitness(SP.simulate(rule,p.maxSteps),p); return {rule,cur:f,i:0,hist:[[0,f]],imps:[{i:0,f,rule:Uint8Array.from(rule)}],goal:p.budget}; }
+function newLineage(p){ const rule=new Uint8Array(SP.NC); const f=fitness(simEvo(rule,p.maxSteps),p); return {rule,cur:f,i:0,hist:[[0,f]],imps:[{i:0,f,rule:Uint8Array.from(rule)}],goal:p.budget}; }
 let lastUI=0, dirtySel=false;
 function pump(){ if(!running) return; const t0=performance.now(); let busy=false;
   while(performance.now()-t0<14){ busy=false;
     for(let k=0;k<lineages.length;k++){ const L=lineages[k]; if(L.i>=L.goal) continue; busy=true;
-      for(let n=0;n<20&&L.i<L.goal;n++){ const r=mutate(L.rule,params); L.i++; const f=fitness(SP.simulate(r,params.maxSteps),params);
+      for(let n=0;n<20&&L.i<L.goal;n++){ const r=mutate(L.rule,params); L.i++; const f=fitness(simEvo(r,params.maxSteps),params);
         if(f>=L.cur){ if(f>L.cur){ L.hist.push([L.i,f]); L.imps.push({i:L.i,f,rule:Uint8Array.from(r)}); if(k===selected) dirtySel=true; } L.rule=r; L.cur=f; } } }
     if(!busy) break; }
   const done=lineages.reduce((a,L)=>a+Math.min(L.i,L.goal),0), goal=lineages.reduce((a,L)=>a+L.goal,0);
@@ -369,7 +407,88 @@ window.addEventListener('keydown',e=>{ if(/INPUT|TEXTAREA|SELECT/.test(document.
   else if(e.key===' '){ e.preventDefault(); growing?stopGrow():startGrow(); } });
 window.addEventListener('resize',()=>{ sizeStage(); if(view.fit) fitView(); draw(); });
 
+/* ---------- starting cells: up to 5, each with a position, a delay and a starting state ----------
+   Shared by the 1D, 2D and 3D RulioOrganisms pages. SeedsUI(dim, onChange) builds the panel in #seedsUI. */
+function SeedsUI(DIM, onChange){
+  const $s=id=>document.getElementById(id), root=$s('seedsUI'), AX=['x','y','z'].slice(0,DIM);
+  const SEEDCOL=['#2a78d6','#eb6834','#2f9e5a','#9b4fd1','#d4a514'];
+  const LAYOUTS={1:[['line','In a line'],['both','Both sides of the first'],['scatter','Scattered']],
+                 2:[['line','In a line'],['cross','Cross (keeps symmetry)'],['ring','Ring around the first'],['diag','Diagonal'],['scatter','Scattered']],
+                 3:[['line','In a line'],['star','Star (keeps symmetry)'],['ring','Ring around the first'],['diag','Diagonal'],['scatter','Scattered']]}[DIM];
+  let K=5, S=[{p:[0,0,0],d:0,c:1}], rnd=1;
+  root.innerHTML=`
+  <div class="row">
+    <div><label class="f" for="sN">Starting cells</label><select id="sN">${[1,2,3,4,5].map(n=>`<option>${n}</option>`).join('')}</select></div>
+    <div><label class="f" for="sLay">Arrangement</label><select id="sLay">${LAYOUTS.map(([v,t])=>`<option value="${v}">${t}</option>`).join('')}</select></div>
+  </div>
+  <div class="row">
+    <div><label class="f" for="sGap">Apart (cells)</label><input type="number" id="sGap" min="1" max="40" value="5"></div>
+    <div><label class="f" for="sDel">Delay between (steps)</label><input type="number" id="sDel" min="0" max="80" value="0"></div>
+  </div>
+  <div class="row">
+    <div><label class="f" for="sCol">Starting states</label><select id="sCol"><option value="same">All the seed color</option><option value="alt">Alternate two colors</option><option value="cycle">Cycle through colors</option></select></div>
+    <div></div>
+  </div>
+  <table class="seedtbl" id="sTbl"></table>
+  <div class="check"><input type="checkbox" id="sEvo"><label for="sEvo">Evolve with these starting cells</label></div>
+  <div class="check"><input type="checkbox" id="sLin"><label for="sLin">Color by starting cell (gray where lineages meet)</label></div>
+  <div class="note" id="sNote"></div>`;
+  const css=document.createElement('style'); css.textContent=`
+    .seedtbl{width:100%;border-collapse:collapse;margin-top:8px;font-size:11.5px;font-variant-numeric:tabular-nums}
+    .seedtbl th{font-weight:500;color:var(--muted);text-align:left;padding:0 2px 3px;font-size:10.5px}
+    .seedtbl td{padding:1px 2px} .seedtbl td:first-child{white-space:nowrap;width:28px}
+    .seedtbl input,.seedtbl select{width:100%;padding:2px 3px;font-size:11.5px;border:1px solid var(--line);border-radius:3px;background:#fff;color:var(--ink)}
+    .seedtbl .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:3px;vertical-align:-1px}`;
+  document.head.appendChild(css);
+
+  const gap=()=>Math.max(1,Math.min(40,+$s('sGap').value|0)), n=()=>+$s('sN').value;
+  function positions(){ const N=n(), g=gap(), lay=$s('sLay').value, P=[[0,0,0]];
+    const r=()=>{ rnd=(rnd*16807)%2147483647; return rnd/2147483647; };
+    for(let i=1;i<N;i++){ let p=[0,0,0];
+      if(lay==='line') p=[i*g,0,0];
+      else if(lay==='both') p=[(i%2?1:-1)*Math.ceil(i/2)*g,0,0];
+      else if(lay==='diag') p=DIM===3?[i*g,i*g,i*g]:[i*g,i*g,0];
+      else if(lay==='cross') p=[[g,0,0],[-g,0,0],[0,g,0],[0,-g,0]][i-1];
+      else if(lay==='star') p=[[g,0,0],[-g,0,0],[0,g,0],[0,-g,0],[0,0,g],[0,0,-g]][i-1];
+      else if(lay==='ring'){ const a=2*Math.PI*(i-1)/(N-1); p=[Math.round(g*Math.cos(a)),Math.round(g*Math.sin(a)),0]; }
+      else if(lay==='scatter'){ const R=g*Math.max(1,N-1); p=[0,1,2].map(k=>k<DIM?Math.round((r()*2-1)*R):0); if(!p.some(v=>v))p[0]=g; }
+      for(let k=DIM;k<3;k++)p[k]=0; P.push(p); }
+    return P; }
+  function rebuild(what){ const N=n(), P=positions(), del=Math.max(0,+$s('sDel').value|0), cs=$s('sCol').value;
+    const old=S; S=[]; for(let i=0;i<N;i++){ const o=old[i]||{p:[0,0,0],d:0,c:1};
+      S.push({p:(what==='all'||what==='pos')?P[i]:o.p.slice(), d:(what==='all'||what==='del')?i*del:o.d, c:(what==='all'||what==='col')?(cs==='same'?1:cs==='alt'?(i%2?Math.min(2,K-1):1):1+(i%(K-1))):Math.min(o.c,K-1)}); }
+    table(); changed(); }
+  function table(){ const t=$s('sTbl'); let h=`<tr><th>#</th>${AX.map(a=>`<th>${a}</th>`).join('')}<th>delay</th><th>state</th></tr>`;
+    S.forEach((s,i)=>{ h+=`<tr><td><span class="dot" style="background:${SEEDCOL[i]}"></span>${i+1}</td>`+
+      AX.map((a,k)=>`<td><input type="number" data-i="${i}" data-k="${k}" value="${s.p[k]}" min="-60" max="60" aria-label="cell ${i+1} ${a}"></td>`).join('')+
+      `<td><input type="number" data-i="${i}" data-k="d" value="${s.d}" min="0" max="200" aria-label="cell ${i+1} delay"></td>`+
+      `<td><select data-i="${i}" data-k="c" aria-label="cell ${i+1} starting state">${Array.from({length:K-1},(_,c)=>`<option value="${c+1}"${s.c===c+1?' selected':''}>${c+1}</option>`).join('')}</select></td></tr>`; });
+    t.innerHTML=h;
+    t.querySelectorAll('input,select').forEach(el=>el.addEventListener('change',()=>{ const i=+el.dataset.i, k=el.dataset.k, v=Math.round(+el.value)||0;
+      if(k==='d') S[i].d=Math.max(0,v); else if(k==='c') S[i].c=v; else S[i].p[+k]=Math.max(-60,Math.min(60,v)); changed(); })); }
+  // delays are measured from the first cell to appear; overlapping cells keep the first one listed
+  function list(){ const m=Math.min(...S.map(s=>s.d)), seen=new Set(), out=[];
+    S.forEach((s,i)=>{ const key=s.p.join(','); if(seen.has(key))return; seen.add(key); out.push({p:s.p.slice(),d:s.d-m,c:s.c,i}); }); return out; }
+  const active=()=>{ const L=list(); return L.length>1||L.some(s=>s.c!==1||s.p.some(v=>v)); };
+  function describe(){ const L=list(), N=L.length; if(!active())return 'one seed';
+    const dl=L.some(s=>s.d)?', staggered up to '+Math.max(...L.map(s=>s.d))+' steps':'';
+    return N+(N===1?' seed':' seeds')+(N>1?', '+$s('sLay').selectedOptions[0].textContent.toLowerCase().replace(/ \(.*\)/,'')+', '+gap()+' apart':'')+dl; }
+  function changed(){ const evo=$s('sEvo');
+    $s('sNote').textContent=active()
+      ? 'Several starting cells (or a moved one) break the shortcut that grows only one symmetric quarter, so the whole space is simulated. Overlapping cells count once.'+(evo.checked?' Evolution scores each mutant on this arrangement, which is slower.':' Organisms are still evolved from one seed unless “Evolve with these starting cells” is on.')
+      : 'One seed at the center: the classic setup.';
+    onChange&&onChange(); }
+  $s('sN').onchange=()=>rebuild('all'); $s('sLay').onchange=()=>{ rnd=Date.now()%2147483647||1; rebuild('pos'); }; $s('sGap').onchange=()=>rebuild('pos');
+  $s('sDel').onchange=()=>rebuild('del'); $s('sCol').onchange=()=>rebuild('col'); $s('sEvo').onchange=changed; $s('sLin').onchange=()=>onChange&&onChange('lineage');
+  rebuild('all');
+  return { list, active, describe, SEEDCOL, lineage:()=>$s('sLin').checked, evolve:()=>$s('sEvo').checked&&active(),
+    setK(k){ K=k; S.forEach(s=>{ if(s.c>K-1)s.c=K-1; }); table(); },
+    // [x,y,z,delay,state] per cell, for the simulators
+    packed:()=>list().map(s=>[s.p[0],s.p[1],s.p[2],s.d,s.c]) };
+}
+
 /* ---------- start: evolve a fresh population straight away ---------- */
+SEEDS=SeedsUI(1,what=>{ if(!shown) return; if(what==='lineage'){ paintImage(); draw(); } else { stopGrow(); show(shown.rule,shown.label); } });
 sizeStage(); setSpace(); $('ftype').onchange(); start(true);
 </script>
 <script>
