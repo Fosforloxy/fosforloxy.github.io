@@ -242,9 +242,13 @@ const rulioDone=L=>L.life>=L.maxT*.92||L.stuck>2500;
 
 SCENES.rulio1d={ title:'RULIOORGANISM 1D', family:'rulio', mode:'every', every:1, warm:0, min:[70,56],
   init(s,ctx,w,h,rng){ s.K=rng.pick([3,4,4]); s.sp=rulio1dSpace(s.K); s.maxT=Math.max(24,Math.min(90,h-8)); s.L=rulioLineage(s.sp,s.maxT,rng); s.shown=null; s.row=0; s.hold=0; s.cols=RULIO_COLS(); s.title='1D RULIOORGANISM K'+s.K; },
-  tick(s,ctx,w,h,t,rng){ const L=s.L; if(!rulioDone(L))L.stepFor(1.2);
-    if(!s.shown||(s.row>=s.shown.rows.length&&--s.hold<=0)){ if(rulioDone(L)&&s.shown&&s.shown.life===L.life&&s.hold<-30){ SCENES.rulio1d.init(s,ctx,w,h,rng); return; }
-      s.shown=s.sp.simulate(L.rule,s.maxT,true); s.shown.life=L.life; s.shown.gen=L.gen; s.row=0; s.hold=40; ctx.fillStyle=ink(); ctx.fillRect(0,0,w,h);
+  tick(s,ctx,w,h,t,rng){ const L=s.L; const done=rulioDone(L); if(!done)L.stepFor(1.2);
+    // draw a champion row by row; while evolving, wait for the next improvement; once the lineage is finished,
+    // hold its final organism for ~2 s, then start a new lineage from a fresh seed
+    const finished=s.shown&&s.row>=s.shown.rows.length; if(finished)s.hold--;
+    let next=!s.shown;
+    if(finished&&s.hold<=0){ if(done&&s.shown.life===L.life){ SCENES.rulio1d.init(s,ctx,w,h,rng); return; } if(L.life!==s.shown.life||done)next=true; }
+    if(next){ s.shown=s.sp.simulate(L.rule,s.maxT,true); s.shown.life=L.life; s.shown.gen=L.gen; s.row=0; s.hold=rulioDone(L)?50:12; ctx.fillStyle=ink(); ctx.fillRect(0,0,w,h);
       const rows=s.shown.rows, Wd=rows[0].length; let lo=Wd, hi=0; for(const r of rows)for(let x=0;x<Wd;x++)if(r[x]){ if(x<lo)lo=x; if(x>hi)hi=x; }
       s.lo=lo; s.span=Math.max(1,hi-lo+1); s.cs=Math.max(1,Math.min(Math.floor((w-4)/s.span),Math.floor((h-12)/rows.length),4)); s.ox=((w-s.span*s.cs)/2)|0; s.oy=2; }
     const rows=s.shown.rows; for(let k=0;k<2&&s.row<rows.length;k++,s.row++){ const r=rows[s.row]; for(let x=0;x<s.span;x++){ const v=r[s.lo+x]; if(v){ ctx.fillStyle=s.cols[v]; ctx.fillRect(s.ox+x*s.cs,s.oy+s.row*s.cs,s.cs,s.cs); } } }
