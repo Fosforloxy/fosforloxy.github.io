@@ -203,7 +203,13 @@ SCENES.elementary={ hero:true, title:'AUTOMATA', mode:'every', every:1, warm:0,
 // A rule grows from a single cell; a random point mutation is kept whenever the pattern lives at least as long
 // (patterns that never die score 0). Each tile runs its own lineage live and shows the current champion.
 // ============================================================
-const RULIO_COLS=()=>[ink(),paper(),colr(2),colr(3),colr(6),colr(5)];
+// these tiles step outside the piece's palette: every new lineage gets its own colour scheme
+const hsl=(h,s,l)=>`hsl(${((h%360)+360)%360},${s}%,${l}%)`;
+function rulioCols(rng){ const h=rng.range(0,360), kind=rng.pick(['analogous','triad','complement','split','wild']);
+  const offs={analogous:[0,28,-28,56,-56],triad:[0,120,240,60,180],complement:[0,180,20,200,-20],split:[0,150,210,30,330],wild:[0,rng.range(40,320),rng.range(40,320),rng.range(40,320),rng.range(40,320)]}[kind];
+  const cols=[hsl(h+rng.range(-40,40),rng.range(25,55),rng.range(5,10))], shade=[cols[0]];
+  for(let i=0;i<5;i++){ const hh=h+offs[i]+rng.range(-10,10), ss=rng.range(60,95), ll=rng.range(48,78); cols.push(hsl(hh,ss,ll)); shade.push(hsl(hh,ss,ll*.55)); }
+  return {cols,shade,text:hsl(h+offs[1],70,85)}; }
 // 1D: K colors, nearest neighbours, left-right symmetric rule cases; 000 → 0 stays fixed
 function rulio1dSpace(K){ const map=new Uint16Array(K*K*K), keys=new Map(); let n=0;
   for(let l=0;l<K;l++)for(let c=0;c<K;c++)for(let r=0;r<K;r++){ const k=Math.min(l,r)*K*K+c*K+Math.max(l,r); if(!keys.has(k))keys.set(k,n++); map[l*K*K+c*K+r]=keys.get(k); }
@@ -240,35 +246,35 @@ function rulioLineage(sp,maxT,rng){ const L={sp,maxT,rule:new Uint8Array(sp.NC),
   return L; }
 const rulioDone=L=>L.life>=L.maxT*.92||L.stuck>2500;
 
-SCENES.rulio1d={ title:'RULIOORGANISM 1D', family:'rulio', mode:'every', every:1, warm:0, min:[70,56],
-  init(s,ctx,w,h,rng){ s.K=rng.pick([3,4,4]); s.sp=rulio1dSpace(s.K); s.maxT=Math.max(24,Math.min(90,h-8)); s.L=rulioLineage(s.sp,s.maxT,rng); s.shown=null; s.row=0; s.hold=0; s.cols=RULIO_COLS(); s.title='1D RULIOORGANISM K'+s.K; },
+SCENES.rulio1d={ keepColour:true, title:'RULIOORGANISM 1D', family:'rulio', mode:'every', every:1, warm:0, min:[70,56],
+  init(s,ctx,w,h,rng){ s.K=rng.pick([3,4,4]); s.sp=rulio1dSpace(s.K); s.maxT=Math.max(24,Math.min(90,h-8)); s.L=rulioLineage(s.sp,s.maxT,rng); s.shown=null; s.row=0; s.hold=0; { const C=rulioCols(rng); s.cols=C.cols; s.shade=C.shade; s.text=C.text; } s.title='1D RULIOORGANISM K'+s.K; },
   tick(s,ctx,w,h,t,rng){ const L=s.L; const done=rulioDone(L); if(!done)L.stepFor(1.2);
     // draw a champion row by row; while evolving, wait for the next improvement; once the lineage is finished,
     // hold its final organism for ~2 s, then start a new lineage from a fresh seed
     const finished=s.shown&&s.row>=s.shown.rows.length; if(finished)s.hold--;
     let next=!s.shown;
     if(finished&&s.hold<=0){ if(done&&s.shown.life===L.life){ SCENES.rulio1d.init(s,ctx,w,h,rng); return; } if(L.life!==s.shown.life||done)next=true; }
-    if(next){ s.shown=s.sp.simulate(L.rule,s.maxT,true); s.shown.life=L.life; s.shown.gen=L.gen; s.row=0; s.hold=rulioDone(L)?50:12; ctx.fillStyle=ink(); ctx.fillRect(0,0,w,h);
+    if(next){ s.shown=s.sp.simulate(L.rule,s.maxT,true); s.shown.life=L.life; s.shown.gen=L.gen; s.row=0; s.hold=rulioDone(L)?50:12; ctx.fillStyle=s.cols[0]; ctx.fillRect(0,0,w,h);
       const rows=s.shown.rows, Wd=rows[0].length; let lo=Wd, hi=0; for(const r of rows)for(let x=0;x<Wd;x++)if(r[x]){ if(x<lo)lo=x; if(x>hi)hi=x; }
       s.lo=lo; s.span=Math.max(1,hi-lo+1); s.cs=Math.max(1,Math.min(Math.floor((w-4)/s.span),Math.floor((h-12)/rows.length),4)); s.ox=((w-s.span*s.cs)/2)|0; s.oy=2; }
     const rows=s.shown.rows; for(let k=0;k<2&&s.row<rows.length;k++,s.row++){ const r=rows[s.row]; for(let x=0;x<s.span;x++){ const v=r[s.lo+x]; if(v){ ctx.fillStyle=s.cols[v]; ctx.fillRect(s.ox+x*s.cs,s.oy+s.row*s.cs,s.cs,s.cs); } } }
-    if(s.row>=rows.length){ ctx.fillStyle=ink(); ctx.fillRect(0,h-7,w,7); drawText(ctx,2,h-6,'LIFE '+s.shown.life+'  GEN '+s.shown.gen,colr(2),w-4); } } };
+    if(s.row>=rows.length){ ctx.fillStyle=s.cols[0]; ctx.fillRect(0,h-7,w,7); drawText(ctx,2,h-6,'LIFE '+s.shown.life+'  GEN '+s.shown.gen,s.text,w-4); } } };
 
-function rulio2dInit(s,w,h,rng,maxT){ s.K=rng.pick([3,3,4]); s.sp=rulio2dSpace(s.K); s.maxT=maxT; s.L=rulioLineage(s.sp,maxT,rng); s.shown=null; s.cols=RULIO_COLS(); }
+function rulio2dInit(s,w,h,rng,maxT){ s.K=rng.pick([3,3,4]); s.sp=rulio2dSpace(s.K); s.maxT=maxT; s.L=rulioLineage(s.sp,maxT,rng); s.shown=null; { const C=rulioCols(rng); s.cols=C.cols; s.shade=C.shade; s.text=C.text; } }
 function rulioRefresh(s){ const L=s.L; s.shown=s.sp.simulate(L.rule,s.maxT,true); s.shown.life=L.life; s.shown.gen=L.gen; }
-SCENES.rulio2d={ title:'RULIOORGANISM 2D', family:'rulio', mode:'every', every:2, warm:0, min:[60,60],
+SCENES.rulio2d={ keepColour:true, title:'RULIOORGANISM 2D', family:'rulio', mode:'every', every:2, warm:0, min:[60,60],
   init(s,ctx,w,h,rng){ rulio2dInit(s,w,h,rng,rng.int(34,52)); s.f=0; s.title='2D RULIOORGANISM K'+s.K; },
   tick(s,ctx,w,h,t,rng){ const L=s.L; if(!rulioDone(L))L.stepFor(2.5);
     if(!s.shown){ rulioRefresh(s); s.f=0; }
     const lay=s.shown.layers, n=lay.length; if(s.f>=n+14){ if(rulioDone(L)&&s.shown.life===L.life){ if((s.loops=(s.loops||0)+1)>3){ SCENES.rulio2d.init(s,ctx,w,h,rng); s.loops=0; return; } } rulioRefresh(s); s.f=0; }
     const E=Math.max(1,s.shown.maxE), D=2*E+1, cs=Math.max(1,Math.min(Math.floor((Math.min(w,h-8))/D),5)), ox=((w-D*cs)/2)|0, oy=((h-8-D*cs)/2)|0;
-    ctx.fillStyle=ink(); ctx.fillRect(0,0,w,h);
+    ctx.fillStyle=s.cols[0]; ctx.fillRect(0,0,w,h);
     if(s.f<n){ const {ext,q}=lay[s.f], e1=ext+1; for(let y=-ext;y<=ext;y++)for(let x=-ext;x<=ext;x++){ const v=q[Math.abs(y)*e1+Math.abs(x)]; if(v){ ctx.fillStyle=s.cols[v]; ctx.fillRect(ox+(x+E)*cs,oy+(y+E)*cs,cs,cs); } } }
     // time bar: how far through this organism's life
-    ctx.fillStyle=colr(4); ctx.fillRect(2,h-3,w-4,1); ctx.fillStyle=colr(2); ctx.fillRect(2,h-3,Math.round((w-4)*Math.min(1,s.f/n)),1);
-    drawText(ctx,2,h-9,'T '+Math.min(s.f,n)+'/'+s.shown.life+'  GEN '+s.shown.gen,paper(),w-4); s.f++; } };
+    ctx.fillStyle=s.shade[1]; ctx.fillRect(2,h-3,w-4,1); ctx.fillStyle=s.text; ctx.fillRect(2,h-3,Math.round((w-4)*Math.min(1,s.f/n)),1);
+    drawText(ctx,2,h-9,'T '+Math.min(s.f,n)+'/'+s.shown.life+'  GEN '+s.shown.gen,s.text,w-4); s.f++; } };
 
-SCENES.rulio3d={ hero:true, title:'RULIOORGANISM 3D', family:'rulio', mode:'every', every:2, warm:0, min:[80,80],
+SCENES.rulio3d={ keepColour:true, hero:true, title:'RULIOORGANISM 3D', family:'rulio', mode:'every', every:2, warm:0, min:[80,80],
   init(s,ctx,w,h,rng){ rulio2dInit(s,w,h,rng,rng.int(30,44)); s.a=rng.range(0,6.28); s.vox=null; s.hold=0; s.title='3D RULIOORGANISM K'+s.K; },
   tick(s,ctx,w,h,t,rng){ const L=s.L; if(!rulioDone(L))L.stepFor(2.5);
     if(!s.vox||(--s.hold<=0&&L.life!==s.shown.life)||(s.hold<-500&&rulioDone(L))){ if(s.hold<-500){ SCENES.rulio3d.init(s,ctx,w,h,rng); }
@@ -280,9 +286,9 @@ SCENES.rulio3d={ hero:true, title:'RULIOORGANISM 3D', family:'rulio', mode:'ever
     s.a+=.012; const ca=Math.cos(s.a), sa=Math.sin(s.a), el=.5, ce=Math.cos(el), se=Math.sin(el);
     const sc=Math.max(.6,Math.min((w-6)/(2*s.E*1.45+2),(h-12)/(s.T*ce+2*s.E*1.45*se+2))); const cx=w/2, cy=(h-8)/2-(s.T*ce*sc)/2+s.E*1.45*se*sc*.5;
     const P=s.vox.map(([x,y,t2,v])=>{ const X=x*ca-y*sa, Z=x*sa+y*ca; return [cx+X*sc, cy+t2*ce*sc+Z*se*sc, Z, v, t2]; }).sort((a,b)=>a[2]-b[2]||b[4]-a[4]);
-    ctx.fillStyle=ink(); ctx.fillRect(0,0,w,h); const d=Math.max(1,Math.ceil(sc)+ (sc>1.4?1:0)); const shade=colr(5);
-    for(const [px,py,Z,v] of P){ ctx.fillStyle=s.cols[v]; ctx.fillRect(Math.round(px),Math.round(py),d,d); if(d>2){ ctx.fillStyle=shade; ctx.fillRect(Math.round(px)+d-1,Math.round(py),1,d); } }
-    ctx.fillStyle=ink(); ctx.fillRect(0,h-7,w,7); drawText(ctx,2,h-6,'LIFE '+s.shown.life+'  GEN '+s.shown.gen,colr(2),w-4); } };
+    ctx.fillStyle=s.cols[0]; ctx.fillRect(0,0,w,h); const d=Math.max(1,Math.ceil(sc)+ (sc>1.4?1:0)); 
+    for(const [px,py,Z,v] of P){ ctx.fillStyle=s.cols[v]; ctx.fillRect(Math.round(px),Math.round(py),d,d); if(d>=2){ ctx.fillStyle=s.shade[v]; ctx.fillRect(Math.round(px)+d-1,Math.round(py),1,d); ctx.fillRect(Math.round(px),Math.round(py)+d-1,d,1); } }
+    ctx.fillStyle=s.cols[0]; ctx.fillRect(0,h-7,w,7); drawText(ctx,2,h-6,'LIFE '+s.shown.life+'  GEN '+s.shown.gen,s.text,w-4); } };
 
 // ---- Automaton I / II: life-like rules with multi-state decay ----
 function parseBS(str){ const b=new Uint8Array(9), sv=new Uint8Array(9); const [B,S]=str.split('/'); for(const c of B.slice(1))b[+c]=1; for(const c of S.slice(1))sv[+c]=1; return {b,sv}; }
