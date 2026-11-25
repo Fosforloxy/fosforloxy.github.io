@@ -278,7 +278,7 @@ SCENES.rulio2d={ keepColour:true, title:'RULIOORGANISM 2D', family:'rulio', mode
     drawText(ctx,2,h-9,'T '+Math.min(s.f,n)+'/'+s.shown.life+'  GEN '+s.shown.gen,s.text,w-4); s.f++; } };
 
 // 3D: symmetric 3D cellular automata (a cell sees itself and its six face neighbours, all 48 cube symmetries alike),
-// using the 4D RulioOrganisms page's own engine. The tile grows each champion's body step by step while it turns.
+// using the 3D RulioOrganisms page's own engine. The tile grows each champion's body step by step while it turns.
 const RULIO4D=(()=>{ const G={};
 
 function core(G){
@@ -1915,7 +1915,7 @@ window.addEventListener('drop',e=>{ e.preventDefault(); for(const f of e.dataTra
 // LANDING PAGE: each tile links to its page on the site; hovering shows where it goes.
 // ============================================================
 const LINKS={ dotsboxes:['dots-and-boxes/','Dots & Boxes'], borgle:['borgle/','Borgle'], calab:['calab/','CALab'], cyclic3:['cyclic-automata/','Cyclic³'], elementary:['automata/','Cellular Automata'],
-  lifelike:['sketches/distinct-gong/','Automaton'], rulio1d:['ruliobiology-2d/','2D RulioOrganisms (1D rules)'], rulio2d:['ruliobiology/','3D RulioOrganisms (2D rules)'], rulio3d:['ruliobiology-4d/','4D RulioOrganisms (3D rules)'], flags:['flag-collager/','Flag Collager'], squigs:['squigs/','Squigs'], chess:['https://www.chess.com/member/fosforloxy','fosforloxy on chess.com'],
+  lifelike:['sketches/distinct-gong/','Automaton'], rulio1d:['ruliobiology-1d/','1D RulioOrganisms'], rulio2d:['ruliobiology/','2D RulioOrganisms'], rulio3d:['ruliobiology-3d/','3D RulioOrganisms'], flags:['flag-collager/','Flag Collager'], squigs:['squigs/','Squigs'], chess:['https://www.chess.com/member/fosforloxy','fosforloxy on chess.com'],
   territory:['sketches/exultant-tin/','Territory'], wavefields:['sketches/delicate-wanderer/','Wave Fields'], pixelfields:['sketches/tulip-law/','Pixel Fields'], terrainfly:['sketches/icy-lever/','Noise Terrain'],
   morphogen:['sketches/morphogenic-lattice/','Morphogenic Lattice'], gravity:['sketches/grav/','Gravity'], boids:['sketches/seemly-porkpie/','Boids'], branching:['sketches/quiet-mortarboard/','Branching Sculpture'],
   coil:['sketches/sand-coil/','Coil'], cubesphere:['sketches/speckled-mangosteen-copy/','Cube Sphere'], rectangles:['sketches/confusion-rocket/','Rectangles'], grid2:['sketches/tropical-powder/','Grid II'],

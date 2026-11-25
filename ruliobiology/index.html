@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="Evolving symmetric 2D cellular automata, after Stephen Wolfram's ruliobiology: each step stacked in 3D, with motif analysis across generations.">
-<title>3D RulioOrganisms — Evolving 2D Cellular Automata</title>
+<title>2D RulioOrganisms — Evolving 2D Cellular Automata</title>
 <style>
   :root{ --bg:#fff; --ink:#1e1e1e; --muted:#8a8a8a; --line:#e6e6e6; --soft:#f6f6f4; --sel:#1e1e1e; }
   *{box-sizing:border-box}
@@ -61,14 +61,21 @@
   .bar{height:3px;background:#eee;border-radius:2px;overflow:hidden;margin-top:6px}
   .bar div{height:100%;width:0;background:#1e1e1e;transition:width .1s}
   @media (max-width:900px){#app,#app.ana{grid-template-columns:1fr;grid-template-rows:auto 90vh auto;height:auto}aside,#anaPane{border:0}}
+  .dims{display:flex;margin:8px 0 8px;border:1px solid var(--ink);border-radius:5px;overflow:hidden}
+  .dims a{flex:1;text-align:center;padding:6px 0;font-size:12px;font-weight:600;letter-spacing:.04em;color:var(--ink);text-decoration:none;border-left:1px solid var(--ink)}
+  .dims a:first-child{border-left:0}
+  .dims a:hover{background:var(--soft)}
+  .dims a[aria-current]{background:var(--ink);color:#fff}
+  .dims a small{font-weight:400;opacity:.7;margin-left:4px}
 </style>
 </head>
 <body>
 <div id="app">
 <aside>
-  <h1>3D RulioOrganisms</h1>
+  <h1>2D RulioOrganisms</h1>
+  <nav class="dims" aria-label="Dimension"><a href="../ruliobiology-1d/" title="1D RulioOrganisms (key 1)">1D</a><a href="../ruliobiology/" aria-current="page" title="2D RulioOrganisms (key 2)">2D</a><a href="../ruliobiology-3d/" title="3D RulioOrganisms (key 3)">3D</a></nav>
   <div class="sub">Symmetric 2D cellular automata, evolved by single-point mutation. Each step is stacked below the last.</div>
-  <div class="links"><a href="../">&larr; Catalog</a> &middot; <a href="https://writings.stephenwolfram.com/2026/10/endless-forms-most-beautiful-and-most-wonderful-ruliobiology-and-the-theoretical-foundations-of-biological-form/" target="_blank" rel="noopener">Wolfram&rsquo;s essay &#8599;</a> &middot; <a href="../ruliobiology-2d/">2D</a> &middot; <a href="../ruliobiology-4d/">4D</a></div>
+  <div class="links"><a href="../">&larr; Catalog</a> &middot; <a href="https://writings.stephenwolfram.com/2026/10/endless-forms-most-beautiful-and-most-wonderful-ruliobiology-and-the-theoretical-foundations-of-biological-form/" target="_blank" rel="noopener">Wolfram&rsquo;s essay &#8599;</a></div>
 
   <h2>Rule space</h2>
   <div class="row">
@@ -803,6 +810,11 @@ function loadDemo(){
 }
 setK(5); syncLabels(); resize(); drawChart(); loadDemo();
 requestAnimationFrame(loop);
+</script>
+<script>
+/* switch between the 1D, 2D and 3D pages: the tabs, or keys 1 / 2 / 3 */
+addEventListener('keydown',e=>{ if(e.ctrlKey||e.metaKey||e.altKey) return; const t=(e.target&&e.target.tagName)||''; if(/INPUT|SELECT|TEXTAREA/.test(t)) return;
+  const go={'1':'../ruliobiology-1d/','2':'../ruliobiology/','3':'../ruliobiology-3d/'}[e.key]; if(go&&!location.pathname.replace(/\/$/,'').endsWith(go.slice(2,-1))) location.href=go; });
 </script>
 </body>
 </html>
