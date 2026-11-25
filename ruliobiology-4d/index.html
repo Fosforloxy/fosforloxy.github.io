@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Evolving symmetric 3D cellular automata, after Stephen Wolfram's ruliobiology: grow a 3D body step by step and watch it live and die.">
+<title>4D RulioOrganisms</title>
+<style>
+  :root{ --bg:#fff; --ink:#1e1e1e; --muted:#8a8a8a; --line:#e6e6e6; --soft:#f6f6f4; --sel:#1e1e1e; color-scheme:light; }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:13px/1.4 -apple-system,"Segoe UI",system-ui,sans-serif}
+  #app{display:grid;grid-template-columns:300px 1fr;height:100%}
+  aside{padding:14px 16px 20px;overflow:auto;border-right:1px solid var(--line)}
+  h1{font-size:15px;margin:0}
+  .sub{color:var(--muted);margin:2px 0 6px;font-size:12px}
+  .links{font-size:12px;margin:0 0 10px} .links a{color:#3f7fc1;text-decoration:none} .links a:hover{text-decoration:underline}
+  h2{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600;margin:16px 0 6px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  h2 span{text-transform:none;letter-spacing:0;font-weight:400}
+  label.f{display:block;font-size:12px;color:#555;margin:7px 0 3px}
+  select,input[type=number],textarea{width:100%;padding:5px 7px;border:1px solid var(--line);border-radius:4px;font:inherit;background:#fff;color:var(--ink)}
+  textarea{height:54px;font-family:ui-monospace,monospace;font-size:10.5px;resize:vertical}
+  input[type=range]{width:100%;margin:2px 0}
+  .row{display:flex;gap:6px}.row>*{flex:1;min-width:0}
+  button{padding:7px 8px;border:1px solid var(--line);border-radius:4px;background:var(--soft);font:inherit;cursor:pointer;color:var(--ink)}
+  button:hover:not(:disabled){border-color:#bbb}
+  button:disabled{opacity:.45;cursor:default}
+  button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+  :focus-visible{outline:2px solid #3f7fc1;outline-offset:1px}
+  .note{font-size:11px;color:var(--muted);margin-top:3px}
+  canvas.panel{display:block;width:100%;border:1px solid var(--line);border-radius:4px;background:#fff}
+  .pal{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+  .pal input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-radius:4px;padding:1px;background:#fff;cursor:pointer}
+  .check{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:12px}
+  .stat{font-variant-numeric:tabular-nums;color:#555;font-size:12px;margin-top:8px}
+  main{display:grid;grid-template-rows:1fr auto auto;min-height:0;min-width:0}
+  #stage{position:relative;min-height:320px;overflow:hidden}
+  canvas#gl{display:block;width:100%;height:100%;cursor:grab;touch-action:none}
+  canvas#gl:active{cursor:grabbing}
+  #xs{position:absolute;right:12px;top:12px;background:#fff;border:1px solid var(--line);border-radius:4px;padding:6px}
+  #xs canvas{display:block;image-rendering:pixelated}
+  #xs div{font-size:11px;color:var(--muted);margin-bottom:4px}
+  #topbar{position:absolute;left:12px;top:10px;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+  #title3d{font-size:12px;color:#555}
+  .vbtns{display:flex;gap:4px}
+  .vbtns button{padding:3px 8px;font-size:11.5px;background:rgba(255,255,255,.9)}
+  .hint{position:absolute;left:14px;bottom:10px;font-size:11px;color:var(--muted)}
+  #time{display:flex;gap:10px;align-items:center;padding:8px 12px;border-top:1px solid var(--line)}
+  #time input{flex:1;min-width:0;accent-color:var(--ink)}
+  #time button{flex:0 0 auto;min-width:74px}
+  #tl{font-variant-numeric:tabular-nums;font-size:12px;color:#555;min-width:118px;text-align:right}
+  #bottom{border-top:1px solid var(--line);padding:8px 12px 10px;background:#fff;min-width:0}
+  .strip{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;min-height:74px}
+  .card{flex:0 0 auto;border:1px solid var(--line);border-radius:4px;padding:4px;cursor:pointer;background:#fff;text-align:center;font:inherit;color:inherit}
+  .card.sel{border-color:var(--sel);box-shadow:0 0 0 1px var(--sel)}
+  .card canvas{display:block;image-rendering:pixelated;margin:0 auto}
+  .card .lbl{font-size:10.5px;color:#555;margin-top:3px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .stripTitle{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:2px 0 5px}
+  #err{margin-top:8px;padding:7px 9px;border:1px solid #e3a59f;background:#fdf1ef;color:#8f2a22;border-radius:4px;font-size:12px}
+  #speedWrap{display:flex;gap:6px;align-items:center;font-size:12px;color:#555;flex:0 0 auto}
+  #speed{width:auto;padding:4px 6px}
+  .bar{height:3px;background:#eee;border-radius:2px;overflow:hidden;margin-top:6px}
+  .bar div{height:100%;width:0;background:#1e1e1e}
+  @media (max-width:900px){html,body{height:auto}#app{grid-template-columns:1fr;height:auto}aside{border:0}#stage{height:70vh}}
+</style>
+</head>
+<body>
+<div id="app">
+<aside>
+  <h1>4D RulioOrganisms</h1>
+  <div class="sub">Symmetric 3D cellular automata, evolved by single-point mutation. Each organism is a 3D body that changes at every step: grow it, scrub through its life, cut it open.</div>
+  <div class="links"><a href="../">&larr; Catalog</a> &middot; <a href="https://writings.stephenwolfram.com/2026/10/endless-forms-most-beautiful-and-most-wonderful-ruliobiology-and-the-theoretical-foundations-of-biological-form/" target="_blank" rel="noopener">Wolfram&rsquo;s essay &#8599;</a> &middot; <a href="../ruliobiology-2d/">2D</a> &middot; <a href="../ruliobiology/">3D</a></div>
+  <h2>Rule space</h2>
+  <div class="row">
+    <div><label class="f" for="K">Colors</label>
+      <select id="K"><option>3</option><option>4</option><option selected>5</option><option>6</option></select></div>
+    <div><label class="f" for="ncDisp">Rule cases</label><input id="ncDisp" type="number" disabled></div>
+  </div>
+  <div class="note">A cell looks at itself and its six face neighbours. Rules treat all 48 rotations and reflections of the cube alike. Mutations to cases the organism never uses are neutral and cost nothing, so the budget scales with the case count.</div>
+  <h2>Selection</h2>
+  <label class="f" for="ftype">Fitness</label>
+  <select id="ftype">
+    <option value="lifetime">Lifetime (steps before dying out)</option>
+    <option value="width">Maximum width</option>
+    <option value="tall">Long-lived &amp; slim (lifetime ÷ width)</option>
+    <option value="wide">Wide &amp; brief (width ÷ lifetime)</option>
+    <option value="mass">Bulk (cells per step)</option>
+    <option value="color">Fraction of one color</option>
+    <option value="oscillate">Stable oscillation (repeats forever, stays bounded)</option>
+    <option value="twoseed">Stays finite beside a second seed (3 and 8 cells away)</option>
+    <option value="damage">Survives single-cell damage</option>
+  </select>
+  <div id="colorPick" style="display:none"><label class="f" for="fcolor">Color</label><select id="fcolor"></select></div>
+  <div class="note" id="fitNote">Patterns that never die get fitness 0. A mutation is kept if fitness doesn't decrease.</div>
+  <h2>Evolution</h2>
+  <div class="row">
+    <div><label class="f" for="nLin">Lineages</label><input type="number" id="nLin" min="1" max="8" value="6"></div>
+    <div><label class="f" for="budget">Mutations each</label><input type="number" id="budget" min="100" step="1000" value="27000"></div>
+  </div>
+  <label class="f" for="maxSteps">Immortality cutoff (max steps) <span id="maxV"></span></label>
+  <input type="range" id="maxSteps" min="30" max="200" step="10" value="100">
+  <div class="note">A mutant that never dies must be run all the way to the cutoff, and that cost grows with the fourth power of the cutoff. 100 is quick; 200 is about sixteen times slower.</div>
+  <label class="f" for="pw">Mutation bias toward white <span id="pwV"></span></label>
+  <input type="range" id="pw" min="0.1" max="0.95" step="0.05" value="0.7">
+  <div class="row" style="margin-top:8px">
+    <button class="primary" id="go">Evolve new</button>
+    <button id="cont" disabled>Continue</button>
+    <button id="stop" disabled>Stop</button>
+  </div>
+  <div class="bar"><div id="pbar"></div></div>
+  <div class="note" id="mode" style="display:none"></div>
+  <div id="err" role="alert" style="display:none"></div>
+  <h2>Fitness <span id="progress"></span></h2>
+  <canvas class="panel" id="chart" width="536" height="220" style="height:110px"></canvas>
+  <div class="note">Gray = all lineages · dark line = selected lineage. About a third of lineages never get going; that is normal in 3D.</div>
+  <h2>Genome <span id="genomeLbl"></span></h2>
+  <canvas class="panel" id="genome" width="536" height="300"></canvas>
+  <div class="note">One square per rule case, grouped by center color; its color is the outcome. Dark-edged = used by this organism.</div>
+  <h2>Colors</h2>
+  <div class="pal" id="pal"></div>
+  <div class="row" style="margin-top:6px"><button id="palReset">Reset colors</button></div>
+  <h2>Seeds</h2>
+  <div class="row">
+    <div><label class="f" for="seedMode">Seeds in one space</label>
+      <select id="seedMode"><option value="1">One</option><option value="2">Two, side by side</option><option value="2d">Two, diagonal</option><option value="3">Three, in an L</option></select></div>
+    <div><label class="f" for="sep">Apart (cells)</label><input type="number" id="sep" min="1" max="30" value="5"></div>
+  </div>
+  <div class="row"><div><label class="f" for="seed2">Other seeds' color</label><select id="seed2"></select></div><div></div></div>
+  <div class="check"><input type="checkbox" id="lineage"><label for="lineage">Color by lineage (blue = first seed, orange = the others, gray = both)</label></div>
+  <div class="note" id="seedNote">With more than one seed the run uses the full space, up to 60 steps, so it is slower to compute.</div>
+  <h2>View</h2>
+  <div class="check"><input type="checkbox" id="cut"><label for="cut">Cutaway (remove the near half)</label></div>
+  <div class="check"><input type="checkbox" id="spin" checked><label for="spin">Slow spin when idle</label></div>
+  <h2>Rule</h2>
+  <textarea id="ruleBox" aria-label="Rule digits" spellcheck="false"></textarea>
+  <div class="row" style="margin-top:6px"><button id="copy">Copy rule</button><button id="load">Load pasted rule</button></div>
+  <div class="note" id="ruleNote">One digit per rule case. Paste a rule for the current color count and press Load.</div>
+  <div class="stat" id="stat"></div>
+</aside>
+<main>
+  <div id="stage">
+    <canvas id="gl"></canvas>
+    <div id="topbar">
+      <div id="title3d"></div>
+      <div class="vbtns"><button data-v="reset">Reset view</button><button data-v="iso">Iso</button><button data-v="side">Side</button><button data-v="top">Top</button></div>
+    </div>
+    <div id="xs"><div>Line through the seed (time ↓)</div><canvas id="xsC" width="10" height="10"></canvas></div>
+    <div class="hint">drag: turn · wheel: zoom · double-click: reset · ← → one step · shift + ← → ten steps · home / end · space: grow / pause</div>
+  </div>
+  <div id="time">
+    <button id="grow">▶ Grow</button>
+    <label id="speedWrap" for="speed">speed <select id="speed"><option value="1">1 step/s</option><option value="2">2 steps/s</option><option value="4" selected>4 steps/s</option><option value="8">8 steps/s</option><option value="16">16 steps/s</option><option value="30">30 steps/s</option></select></label>
+    <input type="range" id="t" min="0" max="1" value="0" step="1" aria-label="Step">
+    <span id="tl"></span>
+  </div>
+  <div id="bottom">
+    <div class="stripTitle">Population (click to view)</div>
+    <div class="strip" id="pop"></div>
+    <div class="stripTitle" style="margin-top:6px">Selected lineage: each improvement (click to view)</div>
+    <div class="strip" id="lin"></div>
+  </div>
+</main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script id="coreSrc">
+function core(G){
+  const spaces={};
+  // Case = (centre; six face-neighbours up to the 48 cube symmetries). Canonical form: sort each opposite pair, then
+  // sort the three pairs. Cases are numbered in order of first appearance (same numbering as the Python engine).
+  function makeSpace(K){
+    if(spaces[K]) return spaces[K];
+    const K2=K*K,K3=K2*K,K4=K3*K,K5=K4*K,K6=K5*K,N=K6*K;
+    const CM=new Uint16Array(N), seen=new Map(), CEN=[]; let NC=0; const n=[0,0,0,0,0,0], pr=[0,0,0];
+    for(let li=0;li<N;li++){
+      const c=Math.floor(li/K6); let r=li%K6;
+      for(let p=5;p>=0;p--){ n[p]=r%K; r=Math.floor(r/K); }
+      for(let a=0;a<3;a++){ const u=n[2*a],v=n[2*a+1]; pr[a]= u<v ? u*K+v : v*K+u; }
+      pr.sort((x,y)=>x-y);
+      const key=((c*K2+pr[0])*K2+pr[1])*K2+pr[2]; let id=seen.get(key);
+      if(id===undefined){ id=NC++; seen.set(key,id); CEN.push(c); }
+      CM[li]=id;
+    }
+    const EDGE=new Int32Array(K); for(let a=1;a<K;a++) EDGE[a]=CM[a*K5];
+    let W=0,W2=0,A=null,B=null,S=null,dirty=0;
+    function simulate(rule,maxSteps,opt){
+      opt=opt||{};
+      if(W!==maxSteps+3){ W=maxSteps+3; W2=W*W; A=new Uint8Array(W*W2); B=new Uint8Array(W*W2); S=new Uint8Array(W*W2); dirty=0; }
+      else { const d=Math.min(W-1,dirty+2); for(let z=0;z<=d;z++) for(let y=0;y<=d;y++){ const b=z*W2+y*W; A.fill(0,b,b+d+1); B.fill(0,b,b+d+1); S.fill(0,b,b+d+1); } dirty=0; }
+      const usage=opt.usage?new Uint8Array(NC):null, layers=opt.layers?[]:null, cc=new Float64Array(K);
+      const imm=new Uint8Array(K);
+      for(let a=1;a<K;a++){ let x=a, ok=1; for(let j=0;j<=K;j++){ x=rule[EDGE[x]]; if(!x){ ok=0; break; } } imm[a]=ok; }
+      let a=A,b=B, ext=0, pext=0, sExt=0, power=1, lam=0, cells=1, maxExt=0, life=0, status=1, period=0; cc[1]=1;
+      a[0]=1; S[0]=1;
+      const snap=(e)=>{ const m=e+1, q=new Uint8Array(m*m*m); for(let z=0;z<m;z++) for(let y=0;y<m;y++){ const s=z*W2+y*W; for(let x=0;x<m;x++) q[(z*m+y)*m+x]=a[s+x]; } layers.push({e,q}); };
+      if(layers) snap(0);
+      outer:
+      for(let t=1;t<=maxSteps;t++){
+        if(!opt.noEdge){ for(let z=0;z<=ext;z++) for(let y=0;y<=ext;y++) if(imm[a[z*W2+y*W+ext]]){ status=2; break outer; } }
+        const R=Math.min(Math.max(ext+1,pext),W-2); let ne=-1; if(R>dirty) dirty=R;
+        for(let z=0;z<=R;z++) for(let y=0;y<=R;y++){ const base=z*W2+y*W;
+          for(let x=0;x<=R;x++){ const i=base+x, c=a[i], xp=a[i+1], xm=x?a[i-1]:xp, yp=a[i+W], ym=y?a[i-W]:yp, zp=a[i+W2], zm=z?a[i-W2]:zp;
+            const li=c*K6+xm*K5+xp*K4+ym*K3+yp*K2+zm*K+zp;
+            if(!li){ b[i]=0; continue; }
+            const ci=CM[li], v=rule[ci]; b[i]=v; if(usage) usage[ci]=1;
+            if(v){ const w=(x?2:1)*(y?2:1)*(z?2:1); cells+=w; cc[v]+=w; if(x>ne) ne=x; if(y>ne) ne=y; if(z>ne) ne=z; } } }
+        pext=ext; ext=ne; const T=a; a=b; b=T;
+        if(ne<0){ life=t; status=0; break; }
+        if(ne>maxExt) maxExt=ne;
+        if(layers) snap(ne);
+        if(ne===sExt){ let same=true; chk: for(let z=0;z<=ne;z++) for(let y=0;y<=ne;y++){ const s=z*W2+y*W; for(let x=0;x<=ne;x++) if(a[s+x]!==S[s+x]){ same=false; break chk; } }
+          if(same){ status=3; period=lam+1; break; } }
+        if(++lam===power){ for(let z=0;z<=sExt;z++) for(let y=0;y<=sExt;y++){ const s=z*W2+y*W; S.fill(0,s,s+sExt+1); }
+          for(let z=0;z<=ne;z++) for(let y=0;y<=ne;y++){ const s=z*W2+y*W; for(let x=0;x<=ne;x++) S[s+x]=a[s+x]; } sExt=ne; power*=2; lam=0; }
+      }
+      if(dirty<maxExt+1) dirty=maxExt+1;
+      return {life, status, period, maxExt, maxWidth:2*maxExt+1, cells, cc, usage, layers};
+    }
+    // Full lattice, no symmetry assumed: several seeds, or one cell deleted mid-life. Port of the verified Python `full`.
+    let FN=0,FA=null,FB=null,FS=null,fd=null;
+    function full(rule,seeds,cut,dmg,usage){
+      let span=0; for(const s of seeds) span=Math.max(span,Math.abs(s[0]),Math.abs(s[1]),Math.abs(s[2]));
+      const N=2*(cut+3)+2*span+1, c0=cut+3+span, N2=N*N;
+      if(FN!==N){ FN=N; FA=new Uint8Array(N*N2); FB=new Uint8Array(N*N2); FS=new Uint8Array(N*N2); fd=null; }
+      else if(fd){ for(let z=fd[4];z<=fd[5];z++) for(let y=fd[2];y<=fd[3];y++){ const b=z*N2+y*N; FA.fill(0,b+fd[0],b+fd[1]+1); FB.fill(0,b+fd[0],b+fd[1]+1); FS.fill(0,b+fd[0],b+fd[1]+1); } }
+      const A=FA,B=FB,S=FS, imm=new Uint8Array(K);
+      for(let a=1;a<K;a++){ let x=a, ok=1; for(let j=0;j<=K;j++){ x=rule[EDGE[x]]; if(!x){ ok=0; break; } } imm[a]=ok; }
+      let x0=N,x1=-1,y0=N,y1=-1,z0=N,z1=-1;
+      for(const s of seeds){ const x=c0+s[0],y=c0+s[1],z=c0+s[2]; A[z*N2+y*N+x]=1; if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; if(z<z0)z0=z; if(z>z1)z1=z; }
+      const cx=c0+seeds[0][0], cy=c0+seeds[0][1], cz=c0+seeds[0][2];
+      fd=[x0-1,x1+1,y0-1,y1+1,z0-1,z1+1]; const grow=()=>{ if(x0-1<fd[0])fd[0]=x0-1; if(x1+1>fd[1])fd[1]=x1+1; if(y0-1<fd[2])fd[2]=y0-1; if(y1+1>fd[3])fd[3]=y1+1; if(z0-1<fd[4])fd[4]=z0-1; if(z1+1>fd[5])fd[5]=z1+1; };
+      let sb=null, power=1, lam=0, maxExt=0, dmgOk=0, t=0;
+      const out=(life,status,period)=>({life,status,period,maxExt,dmgOk});
+      for(;;){
+        if(dmg && t===dmg.step){ let best=-1, bi=-1, cnt=0;
+          for(let z=z0;z<=z1;z++) for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){ const i=z*N2+y*N+x; if(!A[i]) continue;
+            const d=Math.max(Math.abs(x-cx),Math.abs(y-cy),Math.abs(z-cz));
+            if(dmg.which===0){ if(best<0||d<best){ best=d; bi=i; } } else if(dmg.which===1){ if(d>best){ best=d; bi=i; } } else { if(cnt===-1){} cnt++; } }
+          if(dmg.which===2 && cnt>0){ const want=dmg.k%cnt; cnt=0; for(let z=z0;z<=z1;z++) for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){ const i=z*N2+y*N+x; if(A[i]){ if(cnt===want) bi=i; cnt++; } } }
+          if(bi>=0){ A[bi]=0; dmgOk=1; } sb=null; power=1; lam=0; }
+        for(let z=z0;z<=z1;z++) for(let y=y0;y<=y1;y++) if(imm[A[z*N2+y*N+x0]]||imm[A[z*N2+y*N+x1]]) return out(0,2,0);
+        for(let z=z0;z<=z1;z++) for(let x=x0;x<=x1;x++) if(imm[A[z*N2+y0*N+x]]||imm[A[z*N2+y1*N+x]]) return out(0,2,0);
+        for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++) if(imm[A[z0*N2+y*N+x]]||imm[A[z1*N2+y*N+x]]) return out(0,2,0);
+        if(t>=cut) return out(0,1,0);
+        let nx0=N,nx1=-1,ny0=N,ny1=-1,nz0=N,nz1=-1;
+        for(let z=z0-1;z<=z1+1;z++) for(let y=y0-1;y<=y1+1;y++){ const base=z*N2+y*N;
+          for(let x=x0-1;x<=x1+1;x++){ const i=base+x, li=A[i]*K6+A[i-1]*K5+A[i+1]*K4+A[i-N]*K3+A[i+N]*K2+A[i-N2]*K+A[i+N2];
+            if(!li){ B[i]=0; continue; } const ci=CM[li]; usage[ci]=1; const v=rule[ci]; B[i]=v;
+            if(v){ if(x<nx0)nx0=x; if(x>nx1)nx1=x; if(y<ny0)ny0=y; if(y>ny1)ny1=y; if(z<nz0)nz0=z; if(z>nz1)nz1=z; } } }
+        for(let z=z0-1;z<=z1+1;z++) for(let y=y0-1;y<=y1+1;y++){ const base=z*N2+y*N; for(let x=x0-1;x<=x1+1;x++){ A[base+x]=B[base+x]; B[base+x]=0; } }
+        t++;
+        if(nx1<0) return out(t,0,0);
+        x0=nx0; x1=nx1; y0=ny0; y1=ny1; z0=nz0; z1=nz1; grow();
+        const e=Math.max(x1-cx,cx-x0,y1-cy,cy-y0,z1-cz,cz-z0); if(e>maxExt) maxExt=e;
+        if(sb && sb[0]===x0&&sb[1]===x1&&sb[2]===y0&&sb[3]===y1&&sb[4]===z0&&sb[5]===z1){ let same=true;
+          chk: for(let z=z0;z<=z1;z++) for(let y=y0;y<=y1;y++){ const base=z*N2+y*N; for(let x=x0;x<=x1;x++) if(A[base+x]!==S[base+x]){ same=false; break chk; } }
+          if(same) return out(0,3,lam+1); }
+        lam++;
+        if(lam===power||!sb){
+          if(sb){ for(let z=sb[4];z<=sb[5];z++) for(let y=sb[2];y<=sb[3];y++){ const base=z*N2+y*N; S.fill(0,base+sb[0],base+sb[1]+1); } power*=2; }
+          for(let z=z0;z<=z1;z++) for(let y=y0;y<=y1;y++){ const base=z*N2+y*N; for(let x=x0;x<=x1;x++) S[base+x]=A[base+x]; }
+          sb=[x0,x1,y0,y1,z0,z1]; lam=0; }
+      }
+    }
+    return spaces[K]={K,NC,CM,CEN,simulate,full};
+  }
+  function fitness(res,type,color){
+    if(!res.life) return 0;
+    switch(type){
+      case 'lifetime': return res.life;
+      case 'width':    return res.maxWidth + res.life*1e-4;
+      case 'tall':     return res.life / res.maxWidth;
+      case 'wide':     return res.maxWidth / res.life;
+      case 'color':    return (res.cells ? (res.cc[color]||0)/res.cells : 0) + res.life*1e-5;
+      case 'mass':     return res.cells / res.life + res.life*1e-4;
+    }
+    return res.life;
+  }
+  const SOLO=[[0,0,0]], DEEP={damage:1,twoseed:1,oscillate:1};
+  // Fitness of a rule under design p.type. Returns {f, used}: used = every case applied in any run that entered the fitness.
+  // f = -1 means "stopped early, cannot reach cur". The three deep designs use the full lattice and cap the cutoff at 100.
+  function evaluate(sp,rule,p,cur){
+    if(!DEEP[p.type]){ const r=sp.simulate(rule,p.maxSteps,{usage:true}); return {f:fitness(r,p.type,p.color), used:r.usage}; }
+    const cut=Math.min(p.maxSteps,100), used=new Uint8Array(sp.NC), s=sp.full(rule,SOLO,cut,null,used), L=s.life;
+    if(p.type==='oscillate'){ if(s.status===0) return {f:L,used}; if(s.status===3) return {f:s.period===1?500+Math.min(s.maxExt,40):1000+10*Math.min(s.period,50)+Math.min(s.maxExt,40),used}; return {f:0,used}; }
+    if(s.status!==0) return {f:0,used};
+    if(L<cur) return {f:-1,used};
+    if(p.type==='damage'){ let robust=0, done=0;
+      for(let k=0;k<2;k++){ const step=Math.floor(L*(k+1)/3+0.5);
+        for(let which=0;which<2;which++){ const d=sp.full(rule,SOLO,cut,{step,which,k:0},used); done++;
+          if(d.dmgOk===1&&d.status===0&&Math.abs(d.life-L)<=0.25*L) robust++;
+          if(L*(1+robust+(4-done))/5<cur) return {f:-1,used}; } }
+      return {f:L*(1+robust)/5,used}; }
+    let f=L;
+    for(const dist of [3,8]){ const j=sp.full(rule,[[0,0,0],[dist,0,0]],cut,null,used); if(j.status!==0) return {f:0,used}; if(j.life<f) f=j.life; if(f<cur) return {f:-1,used}; }
+    return {f,used}; }
+  // One lineage's state and a time-sliced step. Used by background workers and by the in-page fallback alike.
+  function evoStart(m){ const sp=makeSpace(m.K), st={sp, rule:Uint8Array.from(m.rule), i:m.i||0, end:(m.i||0)+m.budget, p:m, sims:0};
+    const r=evaluate(sp,st.rule,m,0); st.cur=r.f; st.used=r.used; return st; }
+  function evoSlice(st,ms){ const p=st.p, sp=st.sp, K=sp.K, t0=Date.now(), imps=[];
+    while(st.i<st.end && Date.now()-t0<ms){
+      const idx=1+Math.floor(Math.random()*(sp.NC-1)), old=st.rule[idx];
+      let nv; do { nv = Math.random()<p.pw ? 0 : 1+Math.floor(Math.random()*(K-1)); } while(nv===old);
+      st.rule[idx]=nv; st.i++;
+      if(!st.used[idx] && st.cur>0) continue;           // case never used: same organism, neutral, accept
+      st.sims++;
+      const r=evaluate(sp,st.rule,p,st.cur), f=r.f;
+      if(f>=st.cur && f>0){ if(f>st.cur) imps.push({i:st.i,f,rule:Array.from(st.rule)}); st.cur=f; st.used=r.used; }
+      else st.rule[idx]=old;
+    }
+    return imps; }
+  // Several seeds in one lattice, every layer recorded with descent tags (colour | tag<<4; tag 1 = first seed only,
+  // 2 = the others only, 3 = both). Stops when the pattern dies, at the cutoff, or when the recording passes cellCap cells.
+  // Coordinates are relative to the seeds' midpoint (integer part of the mean seed position).
+  function multiLayers(sp,rule,seeds,cols,cut,cellCap){
+    const K=sp.K, CM=sp.CM, K2=K*K,K3=K2*K,K4=K3*K,K5=K4*K,K6=K5*K;
+    let span=0; for(const s of seeds) span=Math.max(span,Math.abs(s[0]),Math.abs(s[1]),Math.abs(s[2]));
+    const N=2*(cut+3)+2*span+1, c0=cut+3+span, N2=N*N;
+    let A=new Uint8Array(N*N2), B=new Uint8Array(N*N2), TA=new Uint8Array(N*N2), TB=new Uint8Array(N*N2);
+    let mx=0,my=0,mz=0; for(const s of seeds){ mx+=s[0]; my+=s[1]; mz+=s[2]; } mx=c0+Math.floor(mx/seeds.length); my=c0+Math.floor(my/seeds.length); mz=c0+Math.floor(mz/seeds.length);
+    let x0=N,x1=-1,y0=N,y1=-1,z0=N,z1=-1;
+    seeds.forEach((s,i)=>{ const x=c0+s[0],y=c0+s[1],z=c0+s[2], j=z*N2+y*N+x; A[j]=cols[i]; TA[j]=i?2:1; x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y);z0=Math.min(z0,z);z1=Math.max(z1,z); });
+    const layers=[]; let stored=0, maxExt=0, life=0, truncated=false;
+    const snap=()=>{ const nx=x1-x0+1, ny=y1-y0+1, nz=z1-z0+1, q=new Uint8Array(nx*ny*nz);
+      for(let z=z0;z<=z1;z++) for(let y=y0;y<=y1;y++){ const b=z*N2+y*N, o=((z-z0)*ny+(y-y0))*nx-x0; for(let x=x0;x<=x1;x++){ const v=A[b+x]; if(v) q[o+x]=v|(TA[b+x]<<4); } }
+      layers.push({b:[x0-mx,x1-mx,y0-my,y1-my,z0-mz,z1-mz],q}); stored+=q.length;
+      maxExt=Math.max(maxExt,mx-x0,x1-mx,my-y0,y1-my,mz-z0,z1-mz); };
+    snap();
+    for(let t=1;t<=cut;t++){
+      let nx0=N,nx1=-1,ny0=N,ny1=-1,nz0=N,nz1=-1;
+      for(let z=z0-1;z<=z1+1;z++) for(let y=y0-1;y<=y1+1;y++){ const base=z*N2+y*N;
+        for(let x=x0-1;x<=x1+1;x++){ const i=base+x, c=A[i], xm=A[i-1], xp=A[i+1], ym=A[i-N], yp=A[i+N], zm=A[i-N2], zp=A[i+N2];
+          const li=c*K6+xm*K5+xp*K4+ym*K3+yp*K2+zm*K+zp; if(!li){ B[i]=0; TB[i]=0; continue; }
+          const v=rule[CM[li]]; B[i]=v;
+          if(v){ TB[i]=(c?TA[i]:0)|(xm?TA[i-1]:0)|(xp?TA[i+1]:0)|(ym?TA[i-N]:0)|(yp?TA[i+N]:0)|(zm?TA[i-N2]:0)|(zp?TA[i+N2]:0);
+            if(x<nx0)nx0=x; if(x>nx1)nx1=x; if(y<ny0)ny0=y; if(y>ny1)ny1=y; if(z<nz0)nz0=z; if(z>nz1)nz1=z; }
+          else TB[i]=0; } }
+      for(let z=z0-1;z<=z1+1;z++) for(let y=y0-1;y<=y1+1;y++){ const base=z*N2+y*N; for(let x=x0-1;x<=x1+1;x++){ const i=base+x; A[i]=B[i]; B[i]=0; TA[i]=TB[i]; TB[i]=0; } }
+      if(nx1<0){ life=t; break; }
+      x0=nx0;x1=nx1;y0=ny0;y1=ny1;z0=nz0;z1=nz1;
+      if(stored+(x1-x0+1)*(y1-y0+1)*(z1-z0+1)>cellCap){ truncated=true; break; }
+      snap();
+    }
+    return {multi:true, life, truncated, layers, maxExt, maxWidth:2*maxExt+1};
+  }
+  G.makeSpace=makeSpace; G.fitness=fitness; G.multiLayers=multiLayers; G.evoStart=evoStart; G.evoSlice=evoSlice; G.evaluate=evaluate;
+}
+if(typeof module!=='undefined') module.exports=core;
+</script>
+<script>
+(function(){
+'use strict';
+const $=id=>document.getElementById(id);
+const G={}; core(G);
+const CORE_SRC=document.getElementById('coreSrc').textContent;
+const evoSrc=CORE_SRC+`
+const G={}; core(G);
+let st=null, stop=false;
+onmessage=({data:m})=>{ if(m.cmd==='start'){ st=G.evoStart(m); stop=false; run(); } else if(m.cmd==='stop'){ stop=true; } };
+function run(){ const imps=G.evoSlice(st,80), done=st.i>=st.end||stop;
+  postMessage({type:done?'done':'tick', i:st.i, sims:st.sims, cur:st.cur, imps, rule:done?Array.from(st.rule):null});
+  if(!done) setTimeout(run,0); }`;
+let evoURL=null; try{ evoURL=URL.createObjectURL(new Blob([evoSrc],{type:'text/javascript'})); }catch(e){ evoURL=null; }
+function showErr(t){ const el=$('err'); el.textContent=t; el.style.display=t?'block':'none'; }
+window.addEventListener('error',e=>showErr('Something went wrong: '+(e.message||'unknown error')+(e.lineno?' (line '+e.lineno+')':'')));
+window.addEventListener('unhandledrejection',e=>showErr('Something went wrong: '+((e.reason&&e.reason.message)||e.reason||'unknown error')));
+
+/* ---------- palette ---------- */
+const DEFAULT_PAL=['#ffffff','#d8433c','#f2bd2b','#5aa451','#7d4fb0','#3f7fc1'];
+let PAL=DEFAULT_PAL.slice();
+function buildPalUI(){ const el=$('pal'); el.textContent='';
+  for(let c=1;c<K;c++){ const inp=document.createElement('input'); inp.type='color'; inp.value=PAL[c]; inp.id='pal'+c; inp.setAttribute('aria-label','Color '+c);
+    inp.oninput=()=>{ PAL[c]=inp.value; onPalette(); }; el.appendChild(inp); } }
+$('palReset').onclick=()=>{ PAL=DEFAULT_PAL.slice(); buildPalUI(); onPalette(); };
+
+/* ---------- state ---------- */
+let K=5, SP=G.makeSpace(5), lineages=[], selected=-1, params=null, running=0;
+let shown=null;      // {rule, res, label}
+let step=0, playing=null, lastTouch=0;
+const EXAMPLES={5:["0240034210020100200244302241304204400403040004040401200400020400010204300320022032014010320424301003020001003433440412303004000222240240442000103023104301400000001130120020001203400212242040220232123002433003002130003041004021012301000003012023042402104420300010104202103001020011030002101001110123002303020433003000303000023130433213324012014200004340000401022200002033000441023000401000130002020000201002000000000042013143030244112000400044020003032303034412310304420204400032020342241324041111400201310402030243340003033342042014200220300430000001030021300400003220023002003104401423020000430020002303044000000302220000100002000003124013000010120330344224402430010100134004420340030041221030001031004041020420033441331211300034144004130014002020200111010032202423234001330201041210412203001212432420010243020110430030033030004203300003401130013000304012444021010024131100044300012031320333010120323040040200134104132132402000001442130043043300240403020000014404244011020001104032013402101430400040100343230001413033000001022304330032444030320343300340003103000101011420214303001403000340130010033042020100002010132042444323044301110330040020214001300003020220020021412120013303002300220001140043104400200000010030004044400034204040103434003230300240030022000003400101300300032322104140110242030440204000000004310022400132040320100320440103330020020303004023000100334033203201203004001340343230001244310221003120310400141102030102122320000300001040303044000301000141004200012120112023300304104000000401130042002323300121212002040002202040001324400324440204004404000044320001004001000334320002241130004000022020233320203440000420020203224121213144210030200001210011030244142003124400001301030300032031210004131401322410000304300243032042000340132022400000303002000000013422002001200001013440040330010231333404100400201000200241000120040100210210113020300004213031403002222000101130010300003223203011440101022030300212122123241430040002400130012211002034001000042420244024344224240332010004212003104000102002043042004031002100004303410002020010021103013003102220021440103111140030042241004231440000212000011003410230314010244443220101114444202040001330010000034042001132232413040210311041120000304001212100200440003030000142300210304240402032240100040442024011022242032444024340120130001442034010101400303342101030020003010430304022011040204000130001032022414401044003401114404200202430043302214434401324140030042203011002034004300310010000100034300023003042230414100204000000002040132242101233030420300440301100003002101442031020011202202410000400003224100233000001402101004020212324324312041330113014041441000034100403000431420300442003200000001114042003113040300424403130100400031320421100100314032000023120040200010300440204302010410340032242424204041200300031130040041341002044133313401000320020023110310013200003000013411000200022323441220002021032222000320120124310300001000002020030314442004023021014101204041024214333200002410423010220004031001104010014400442244200032320000102303040333210013133340000102021444202001303012221121211113303033211000331320010040242430024001443342003031201202410000014012040113004301322004304043020101300000114442030302203441430020400000110130001110202033023041100103012400020020221400110002204003210301343032201014404323000000000330402002201000332440331302011021010203030341404003030413113220003311020002032300141031340001031031300241101213124403404140000104131","0240300240310020012020210130000310102320000030344410230321433302304421010400003010003320203024002322013400011003420000002300001200400220220401044222043121102044312002002102200011300300320140301324423004030234400004404400423200400020132004020032304310404010324014431040041302000002002003000200020214000002011222010340000403400333010004000012310420132044400241340413023040212240022303000020442030103002021002000440032300300334040200122200124323044030143212002133000333000231123200200011110330023044030400340333430040204002300103021433320004000103020220104202004302012300203320012000013024141403040241000220421000134230320044021212032043400244022040300024403011003212020000204210102313001041001000032220000010000420102001011001413040004220031212001200310130403110343412023301100040000200300231321100013310100004444000010420413013424002103212004003314020022000001013314331312014140333201040231404310121200220212142400440200000423000043324003002000300003100000030123044003110031000034001003010304140222402000342200021001203330000000002300322042004403301000000003420234030003140204220010002230303021022000440004213201203400043400134410144304203100000003403021424113134012020240033044200142020310004240232000204000330440323000122440000332043320111322212203444101210200210004330022240311013302340410101442224400300102000330040011134304204320042003013240012143224111002300330334323010423342033103314140440340003000002140314100000400040404000002001000000144000110303313220214400303430032304120100404401211001200240220143020310100410031234030100114300022200003441314222400220300301301003302300010304141034400124301400303313013002400301300222211003100000003420142404100020100403242010030242430102002310000330113404030000031010200000210021410201143040100300102223010223320000140210200100302121024322003002324003444020014000314001040224440011020100424040444010020002000301220403302100244120331441423133003034030410233230032012300210040200001030422400133041300001440010114200002404000300343021243201000120401413040312012033440401404000011301021313220300210001000320040430100003204103140004020210012020044301212000130002200030340340042103040142041403002344011040201302132340100102000200002403143313140203144104013300000131040200004020004432233400200114104402403020004314133014012103200002344134001012310100433401202201343320040332100230010320012404022040314303140010432302034132024011012132230040044010122232331103000004340103001002030040311110300000401404002033134300203430103020303020313044023043000004010120300101401022120140031102221233410442230311000200000022202040304330301002001021002102003200302042040010410203002040002433104002330312030040203034123043033430110410420122003244000202142004210121000001201200003224003040001000311304404032240130200003000304300043240400004102102024230401110030023000003400001400034300011030431300300400000034440240020202003202103022124103203400000231324204001033411034021021210012040102310410041024112121303430300412440043430210002010130020300224012001114100401423102300100001000200143014121031000100311023220301042303400010400002023333043000000201002030400012011214012034400004131103013340000004134013000100114133103400242224420000000000042203100000004032201404413000120204134010401100400310002042003040020410021013240404300000302001010411331001200302300100003012000123300223000020414004034200000304144242043144441010202303300004001340403401220034040003033210212210032332402201","0200000034104002000043044400030003132002400020033240304211234304213001002001343123040403103001402410330320030032232204030303000004110020000001001000420003240030020434332101201301120300233100140133012311344043332432100142040402014230340030004200103142424300432020033300000424120430004113242300324041000420000003022003200031014023344033003331241201000002411013003020003000031432110103001402200400340034004400004442310300000031104302010130102433321030112124400010202210031000000041023400204002004040000400122100030200104024000000300302000404304013000003140020234002221333400102000042100321140313410242421004010003203302044410422300033401130043020022010241003001234330010032313000100140002042320041044340300410330020230000033200412220133020002043142002241423240330020100041000300040203120020440002134203241032000430013222000010300111000120034212322320203120300334410302030333040040400220340032243243020003210320333200120201001002140044033040020303030113401000414341220201130030010311041000330032310003110002313223104120123000400010204402101013022420004020100422002033000030211012003021240231231000024020004442133210140010200133020101201403031433304014041432322000220002142342010000042410001000341311000122000031040402020441230102312130000220200020010410310224033134001004123404141134001132023004003001104200002302204331401224410000333244100420020100314140024200100000044023422310122032411311014331140032014204301110140424000020022343000024003004030003400440010223400044004200031413031020441202020100231010013100104031023322101020440410004032204440402021000442400140103332031100004000443004012300030004101042100142030000011200000003303403440010042201130042021000102030030002240002030424020140021200000022402000000000142010200013014022242311133041414044102041012024334044333003032003300304302132000232013010000324031203400212124203302004101403400130010002400000402140410014000301001340220011004203242214441323120314000410033310404202000330043024014034143034140040044100001010443203331002004002440022204000000030204301030410044400000002321004011000130442033023141423014201000113414033411130001031020000000323023000030331001000110302342042423422030120020120333400003022400004000043004231010040144340322043014230223000020300030220130004001402104422104012034041214300431000204310201041413033022000000204200303110020034100000004232314210440000021030334431200441124240403201034400020431003302322203210140120240402404344042014141000030300202042303002020023010430403303440310440024011402402302000240100010042020230421002000443034003413030102004303044141104310301000021104010133220334004200440004034234400443200200003110103010000304440020222143413102300441020002022021010201230302204014100101400330400000030111210044030030302000402302202000230140101002014230101200032010223100242024202021030020300110000040100300003001001141000010034004002110001012030041300000410340330320444031144004104001011000044030040300113043001100310010022023002404040000143134034030214400202033234140300003441210033010000200020321440003101404403343334000003300443043232302041402204120334211113002220100044401030144213130100000120002320034403200310010300443214002100031130202214300223002020302402300432044002022010230401014022440210010104230200240031003020400302010002423333213310144120010002002122310230340403020104043010011100040004434041341110040030030002001010440030334021030340010204102312124000000220001200303200300002301312301303204413"]};
+
+/* ---------- 3D stage ---------- */
+const canvas=$('gl'); let renderer=null, scene, cam, group, mesh=null, cap=0;
+const view={yaw:0.7,pitch:0.42,zoom:1};
+const dummy=typeof THREE!=='undefined'?new THREE.Object3D():null, col=typeof THREE!=='undefined'?new THREE.Color():null;
+function initGL(){
+  if(typeof THREE==='undefined'){ $('title3d').textContent='The 3D library did not load, so the body cannot be drawn.'; return; }
+  renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true}); renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
+  scene=new THREE.Scene(); cam=new THREE.OrthographicCamera(-1,1,1,-1,-4000,4000); group=new THREE.Group(); scene.add(group);
+  scene.add(new THREE.AmbientLight(0xffffff,0.62)); const d=new THREE.DirectionalLight(0xffffff,0.62); d.position.set(-0.6,0.9,1); scene.add(d);
+  let last=null;
+  canvas.addEventListener('pointerdown',e=>{ last=[e.clientX,e.clientY]; canvas.setPointerCapture(e.pointerId); lastTouch=performance.now(); });
+  canvas.addEventListener('pointermove',e=>{ if(!last) return; view.yaw+=(e.clientX-last[0])*0.01; view.pitch=Math.max(-1.55,Math.min(1.55,view.pitch+(e.clientY-last[1])*0.01)); last=[e.clientX,e.clientY]; lastTouch=performance.now(); draw(); });
+  const end=()=>{ last=null; }; canvas.addEventListener('pointerup',end); canvas.addEventListener('pointercancel',end);
+  canvas.addEventListener('wheel',e=>{ e.preventDefault(); view.zoom=Math.max(0.3,Math.min(8,view.zoom*(e.deltaY<0?1.1:0.9))); lastTouch=performance.now(); draw(); },{passive:false});
+  canvas.addEventListener('dblclick',()=>setView('reset'));
+  window.addEventListener('resize',draw);
+  (function tick(){ if($('spin').checked && performance.now()-lastTouch>2500 && !document.hidden){ view.yaw+=0.004; draw(); } requestAnimationFrame(tick); })();
+}
+function setView(v){ if(v==='reset'){ view.yaw=0.7; view.pitch=0.42; view.zoom=1; } else if(v==='iso'){ view.yaw=Math.PI/4; view.pitch=0.6155; } else if(v==='side'){ view.yaw=0; view.pitch=0; } else if(v==='top'){ view.yaw=0; view.pitch=Math.PI/2; } lastTouch=performance.now(); draw(); }
+document.querySelectorAll('.vbtns button').forEach(b=>b.onclick=()=>setView(b.dataset.v));
+function draw(){ if(!renderer) return; const w=canvas.clientWidth,h=canvas.clientHeight; if(!w||!h) return;
+  if(renderer._w!==w||renderer._h!==h){ renderer.setSize(w,h,false); renderer._w=w; renderer._h=h; }
+  const R=((shown?shown.res.maxExt:1)*1.8+2)/view.zoom, asp=w/h; cam.left=-R*Math.max(1,asp); cam.right=R*Math.max(1,asp); cam.top=R*Math.max(1,1/asp); cam.bottom=-R*Math.max(1,1/asp); cam.updateProjectionMatrix();
+  group.rotation.set(view.pitch,view.yaw,0); renderer.render(scene,cam); }
+// visible cells of the full body at one step: surface cells only, or the far half with its cut face when cutaway is on
+function bodyCells(layer,cut){ const out=[];
+  if(layer.b){ const [X0,X1,Y0,Y1,Z0,Z1]=layer.b, nx=X1-X0+1, ny=Y1-Y0+1, q=layer.q;
+    const at=(x,y,z)=>(x<X0||x>X1||y<Y0||y>Y1||z<Z0||z>Z1)?0:q[((z-Z0)*ny+(y-Y0))*nx+(x-X0)];
+    for(let z=Z0;z<=Z1;z++){ if(cut&&z>0) continue;
+      for(let y=Y0;y<=Y1;y++) for(let x=X0;x<=X1;x++){ const w=at(x,y,z); if(!w) continue;
+        if((cut&&z===0)||!at(x+1,y,z)||!at(x-1,y,z)||!at(x,y+1,z)||!at(x,y-1,z)||!at(x,y,z+1)||!at(x,y,z-1)) out.push(x,y,z,w&15,w>>4); } }
+    return out; }
+  const m=layer.e+1, q=layer.q;
+  const at=(x,y,z)=>{ x=x<0?-x:x; y=y<0?-y:y; z=z<0?-z:z; return (x>=m||y>=m||z>=m)?0:q[(z*m+y)*m+x]; };
+  for(let z=-layer.e;z<=layer.e;z++){ if(cut&&z>0) continue;
+    for(let y=-layer.e;y<=layer.e;y++) for(let x=-layer.e;x<=layer.e;x++){ const v=at(x,y,z); if(!v) continue;
+      if((cut&&z===0)||!at(x+1,y,z)||!at(x-1,y,z)||!at(x,y+1,z)||!at(x,y-1,z)||!at(x,y,z+1)||!at(x,y,z-1)) out.push(x,y,z,v,1); } }
+  return out; }
+const LINEAGE=[null,'#2a78d6','#eb6834','#4a4a4a'];
+function showStep(t){ if(!shown) return; const L=shown.res.layers; step=Math.max(0,Math.min(L.length-1,t)); $('t').value=step;
+  $('tl').textContent='step '+step+' of '+(shown.res.life||('≥'+(L.length-1)));
+  if(renderer){ const cells=bodyCells(L[step],$('cut').checked), n=cells.length/5, byLin=$('lineage').checked&&shown.res.multi;
+    if(n>cap){ if(mesh){ group.remove(mesh); if(mesh.dispose) mesh.dispose(); } cap=Math.max(256,Math.ceil(n*1.5)); mesh=new THREE.InstancedMesh(new THREE.BoxGeometry(0.94,0.94,0.94),new THREE.MeshLambertMaterial({color:0xffffff}),cap); mesh.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array(cap*3),3); group.add(mesh); }
+    if(mesh){ mesh.count=n; for(let i=0;i<n;i++){ dummy.position.set(cells[5*i],cells[5*i+2],-cells[5*i+1]); dummy.updateMatrix(); mesh.setMatrixAt(i,dummy.matrix); mesh.setColorAt(i,col.set(byLin?LINEAGE[cells[5*i+4]]:PAL[cells[5*i+3]])); }
+      mesh.instanceMatrix.needsUpdate=true; if(mesh.instanceColor) mesh.instanceColor.needsUpdate=true; } draw(); }
+  drawXS(); }
+$('t').oninput=function(){ stopPlay(); lastTouch=performance.now(); showStep(+this.value); };
+$('cut').onchange=()=>showStep(step); $('lineage').onchange=()=>showStep(step);
+function stopPlay(){ if(playing){ clearInterval(playing); playing=null; $('grow').textContent='▶ Grow'; } }
+function startPlay(){ if(!shown) return; stopPlay(); if(step>=shown.res.layers.length-1) showStep(0);
+  $('grow').textContent='❚❚ Pause'; playing=setInterval(()=>{ if(step>=shown.res.layers.length-1){ stopPlay(); return; } showStep(step+1); },1000/(+$('speed').value||4)); }
+$('grow').onclick=()=>{ if(playing) stopPlay(); else startPlay(); };
+$('speed').onchange=()=>{ if(playing) startPlay(); };
+document.addEventListener('keydown',e=>{ if(!shown||e.ctrlKey||e.metaKey||e.altKey) return; const tag=(e.target&&e.target.tagName)||'';
+  if(tag==='TEXTAREA'||tag==='SELECT'||(tag==='INPUT'&&e.target.type!=='range'&&e.target.type!=='checkbox')) return;
+  const last=shown.res.layers.length-1; let to=null;
+  if(e.key==='ArrowRight') to=step+(e.shiftKey?10:1); else if(e.key==='ArrowLeft') to=step-(e.shiftKey?10:1); else if(e.key==='Home') to=0; else if(e.key==='End') to=last;
+  else if(e.key===' '||e.code==='Space'){ if(tag==='BUTTON'||tag==='INPUT') return; e.preventDefault(); if(playing) stopPlay(); else startPlay(); return; }
+  if(to===null) return; e.preventDefault(); stopPlay(); lastTouch=performance.now(); showStep(to); });
+
+/* ---------- cross-section (line through the seed over time) ---------- */
+function xsImage(res,cv,maxPx){ const L=res.layers, T=L.length, e=Math.max(1,res.maxExt), w=2*e+1; cv.width=w; cv.height=T;
+  const ctx=cv.getContext('2d'), img=ctx.createImageData(w,T), byLin=res.multi&&$('lineage').checked, rgb=(byLin?LINEAGE.map(h=>h||'#ffffff'):PAL).map(h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
+  for(let t=0;t<T;t++){ const lay=L[t];
+    for(let x=-e;x<=e;x++){ let v;
+      if(lay.b){ const [X0,X1,Y0,Y1,Z0,Z1]=lay.b; const w2=(x<X0||x>X1||0<Y0||0>Y1||0<Z0||0>Z1)?0:lay.q[((0-Z0)*(Y1-Y0+1)+(0-Y0))*(X1-X0+1)+(x-X0)]; v=byLin?(w2>>4):(w2&15); }
+      else { const m=lay.e+1, ax=Math.abs(x); v=ax<m?lay.q[ax]:0; }
+      const c=rgb[v], o=(t*w+x+e)*4; img.data[o]=c[0]; img.data[o+1]=c[1]; img.data[o+2]=c[2]; img.data[o+3]=255; } }
+  ctx.putImageData(img,0,0); const s=Math.max(1,Math.min(Math.floor(maxPx/w)||1,Math.floor((maxPx>60?220:96)/T)||1)); cv.style.width=(w*s)+'px'; cv.style.height=Math.max(2,T*s)+'px'; return s; }
+function drawXS(){ if(!shown) return; const cv=$('xsC'); xsImage(shown.res,cv,120); const ctx=cv.getContext('2d'); ctx.fillStyle='rgba(30,30,30,0.35)'; ctx.fillRect(0,step,cv.width,1); }
+
+/* ---------- show an organism ---------- */
+const dispCut=()=>Math.max(160,params?params.maxSteps:+$('maxSteps').value);
+function seedLayout(){ const m=$('seedMode').value, d=Math.max(1,Math.min(30,+$('sep').value|0)), c2=+$('seed2').value||1;
+  if(m==='1') return null;
+  if(m==='2') return {seeds:[[0,0,0],[d,0,0]],cols:[1,c2],txt:'two seeds '+d+' apart'};
+  if(m==='2d') return {seeds:[[0,0,0],[d,d,0]],cols:[1,c2],txt:'two seeds '+d+' apart on both axes'};
+  return {seeds:[[0,0,0],[d,0,0],[0,d,0]],cols:[1,c2,c2],txt:'three seeds, '+d+' apart'}; }
+function show(rule,label){ stopPlay(); let res=SP.simulate(rule,dispCut(),{usage:true});
+  const lay=seedLayout();
+  if(lay){ const solo=res, multi=G.multiLayers(SP,rule,lay.seeds,lay.cols,60,30e6); multi.usage=solo.usage; multi.cells=solo.cells;
+    shown={rule:Uint8Array.from(rule),res:multi,label}; $('t').max=Math.max(1,multi.layers.length-1);
+    $('title3d').textContent=label+' · '+lay.txt+(multi.life?' · together they last '+multi.life+' steps':multi.truncated?' · grows without limit (first '+(multi.layers.length-1)+' steps shown)':' · still going at step 60')+' · alone: '+(solo.life?solo.life+' steps':'never dies');
+    let used=0; for(let i=0;i<SP.NC;i++) used+=solo.usage[i];
+    $('stat').textContent='together: '+(multi.life||'≥60')+' steps · alone: '+(solo.life||'∞')+' · widest together '+multi.maxWidth+' cells · '+used+' of '+SP.NC+' cases used alone';
+    $('ruleBox').value=Array.from(shown.rule).join(''); drawGenome(); showStep(Math.min(multi.layers.length-1,Math.max(0,Math.floor(multi.layers.length*0.45)))); return; }
+  // finite: record every layer. Never dies: record only the first 40 steps, which is enough to see it take off.
+  res=(res.life||res.status===3)?SP.simulate(rule,dispCut(),{usage:true,layers:true,noEdge:true}):SP.simulate(rule,40,{usage:true,layers:true,noEdge:true});
+  shown={rule:Uint8Array.from(rule),res,label}; $('t').max=Math.max(1,res.layers.length-1);
+  $('title3d').textContent=label+(res.life?' · lives '+res.life+' steps':res.status===3?(res.period===1?' · never dies: a still life':' · never dies: repeats every '+res.period+' steps')+' (shown until the first repeat)':' · never dies (first '+(res.layers.length-1)+' steps shown)');
+  let used=0; for(let i=0;i<SP.NC;i++) used+=res.usage[i];
+  $('stat').textContent='lifetime '+(res.life||'∞')+(res.status===3?' · period '+res.period:'')+' · widest '+res.maxWidth+' cells · '+Math.round(res.cells).toLocaleString()+' cell-steps · '+used+' of '+SP.NC+' cases used';
+  $('ruleBox').value=Array.from(shown.rule).join(''); drawGenome(); showStep(Math.min(res.layers.length-1,Math.max(0,Math.floor((res.life||res.layers.length)*0.45)))); }
+function drawGenome(){ const cv=$('genome'), ctx=cv.getContext('2d'), NC=SP.NC; if(!shown) return;
+  const cols=Math.ceil(Math.sqrt(NC*536/300)*1.0), s=Math.max(2,Math.floor(536/cols)), rows=Math.ceil(NC/cols)+K; cv.height=Math.min(900,rows*s+4); cv.style.height=(cv.height/2)+'px';
+  ctx.fillStyle='#fff'; ctx.fillRect(0,0,cv.width,cv.height); let x=0,y=0,prev=0;
+  for(let i=0;i<NC;i++){ if(SP.CEN[i]!==prev){ prev=SP.CEN[i]; x=0; y+=s+3; }
+    ctx.fillStyle=shown.rule[i]?PAL[shown.rule[i]]:'#f1f1ee'; ctx.fillRect(x+0.5,y+0.5,s-1,s-1);
+    if(shown.res.usage[i]){ ctx.strokeStyle='#1e1e1e'; ctx.lineWidth=1; ctx.strokeRect(x+0.5,y+0.5,s-1,s-1); }
+    x+=s; if(x+s>536){ x=0; y+=s; } }
+  $('genomeLbl').textContent=NC+' cases'; }
+function onPalette(){ if(shown){ showStep(step); drawGenome(); } renderPop(); renderLin(); }
+
+/* ---------- strips ---------- */
+function card(rule,lbl,sel,onclick){ const b=document.createElement('button'); b.type='button'; b.className='card'+(sel?' sel':''); const cv=document.createElement('canvas');
+  const res=SP.simulate(rule,dispCut(),{layers:true}); if(res.layers.length>1) xsImage(res,cv,34); else { cv.width=cv.height=1; cv.style.width='34px'; cv.style.height='34px'; }
+  b.appendChild(cv); const d=document.createElement('div'); d.className='lbl'; d.textContent=lbl; b.appendChild(d); b.onclick=onclick; return b; }
+const fmt=f=>f>=100?f.toFixed(0):f>=10?f.toFixed(1):f.toFixed(2);
+function renderPop(){ const el=$('pop'); el.textContent='';
+  if(!lineages.length){ (EXAMPLES[K]||[]).forEach((ex,k)=>el.appendChild(card(ex.rule,'example '+(k+1),shown&&shown.label==='Example '+(k+1),()=>{ show(ex.rule,'Example '+(k+1)); renderPop(); }))); return; }
+  lineages.forEach((L,k)=>el.appendChild(card(L.rule,'L'+(k+1)+' · '+fmt(L.cur),k===selected,()=>{ selected=k; show(L.rule,'Lineage '+(k+1)+', latest'); renderPop(); renderLin(); drawChart(); }))); }
+function renderLin(){ const el=$('lin'); el.textContent=''; const L=lineages[selected]; if(!L) return;
+  L.imps.slice(-40).forEach(im=>el.appendChild(card(im.rule,'#'+im.i+' · '+fmt(im.f),false,()=>show(im.rule,'Lineage '+(selected+1)+' at mutation '+im.i)))); el.scrollLeft=el.scrollWidth; }
+
+/* ---------- chart ---------- */
+function drawChart(){ const cv=$('chart'), ctx=cv.getContext('2d'), W=cv.width, H=cv.height; ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H); if(!lineages.length) return;
+  let maxF=1e-9, maxI=1; lineages.forEach(L=>{ maxI=Math.max(maxI,L.i); L.hist.forEach(p=>{ if(p[1]>maxF) maxF=p[1]; }); });
+  const X=i=>36+(W-46)*i/maxI, Y=f=>H-18-(H-30)*f/maxF;
+  ctx.strokeStyle='#e6e6e6'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(36,H-18); ctx.lineTo(W-10,H-18); ctx.stroke();
+  ctx.fillStyle='#8a8a8a'; ctx.font='20px sans-serif'; ctx.fillText(fmt(maxF),2,22); ctx.fillText('0',20,H-18); ctx.fillText(maxI.toLocaleString()+' mutations',W-190,H-1);
+  const line=(L,c,w)=>{ ctx.strokeStyle=c; ctx.lineWidth=w; ctx.beginPath(); let f=0; ctx.moveTo(X(0),Y(0)); L.hist.forEach(p=>{ ctx.lineTo(X(p[0]),Y(f)); ctx.lineTo(X(p[0]),Y(p[1])); f=p[1]; }); ctx.lineTo(X(L.i),Y(f)); ctx.stroke(); };
+  lineages.forEach((L,k)=>{ if(k!==selected) line(L,'#c9c9c9',2); }); if(lineages[selected]) line(lineages[selected],'#1e1e1e',3); }
+
+/* ---------- evolution ---------- */
+function readParams(){ return {K, type:$('ftype').value, color:+$('fcolor').value||1, maxSteps:+$('maxSteps').value, pw:+$('pw').value, budget:Math.max(100,+$('budget').value|0)}; }
+function setRunning(on){ $('go').disabled=on; $('cont').disabled=on||!lineages.length; $('stop').disabled=!on; $('K').disabled=on; }
+let noWorkers=false, locals=[], pumping=false;
+function onMsg(L,m){ L.i=m.i; L.sims=m.sims; L.cur=m.cur;
+  m.imps.forEach(im=>{ L.imps.push({i:im.i,f:im.f,rule:Uint8Array.from(im.rule)}); L.hist.push([im.i,im.f]); L.rule=Uint8Array.from(im.rule); });
+  if(m.type==='done'){ L.rule=Uint8Array.from(m.rule); if(L.worker){ L.worker.terminate(); L.worker=null; } L.local=null; running--; if(running<=0){ running=0; setRunning(false); } }
+  schedule(); }
+function startMsg(L){ return {cmd:'start',K,rule:Array.from(L.rule),i:L.i,budget:L.target-L.i,type:params.type,color:params.color,maxSteps:params.maxSteps,pw:params.pw}; }
+function useFallback(L,why){ if(!noWorkers){ noWorkers=true; $('mode').textContent='Running in the page itself because background workers are unavailable here'+(why?' ('+why+')':'')+'. It is slower and the page may stutter.'; $('mode').style.display='block'; }
+  if(L.worker){ try{ L.worker.terminate(); }catch(e){} L.worker=null; }
+  try{ L.local={st:G.evoStart(startMsg(L)),stop:false}; locals.push(L); pump(); }catch(e){ showErr('Evolution could not start: '+e.message); running--; if(running<=0){ running=0; setRunning(false); } } }
+function pump(){ if(pumping) return; pumping=true;
+  (function slice(){ locals=locals.filter(L=>L.local); if(!locals.length){ pumping=false; return; }
+    for(const L of locals){ const st=L.local.st, imps=G.evoSlice(st,Math.max(8,40/locals.length)), done=st.i>=st.end||L.local.stop;
+      onMsg(L,{type:done?'done':'tick',i:st.i,sims:st.sims,cur:st.cur,imps,rule:done?Array.from(st.rule):null}); }
+    setTimeout(slice,0); })(); }
+function startLineage(L){ running++; L.target=L.i+params.budget;
+  if(noWorkers||!evoURL||typeof Worker==='undefined'){ useFallback(L,''); return; }
+  try{ const w=new Worker(evoURL); L.worker=w;
+    w.onmessage=({data:m})=>{ if(L.worker===w) onMsg(L,m); };
+    w.onerror=e=>{ if(e&&e.preventDefault) e.preventDefault(); if(L.worker===w) useFallback(L,(e&&e.message)||'worker failed'); };
+    w.postMessage(startMsg(L));
+  }catch(e){ useFallback(L,e.message); } }
+function halt(){ lineages.forEach(L=>{ if(L.worker){ L.worker.terminate(); L.worker=null; } L.local=null; }); locals=[]; running=0; }
+let pending=false, lastBest=-1;
+function schedule(){ if(pending) return; pending=true; setTimeout(()=>{ pending=false; refresh(); },250); }
+function refresh(){ let done=0,tot=0,sims=0; lineages.forEach(L=>{ done+=L.i-(L.target-params.budget); tot+=params.budget; sims+=L.sims; }); if(!lineages.length) return;
+  $('pbar').style.width=(tot?100*done/tot:0)+'%'; $('progress').textContent=(running?'running · ':'done · ')+sims.toLocaleString()+' mutants tested';
+  if(selected<0||!lineages[selected]) selected=0;
+  const best=lineages.reduce((b,L,k)=>L.cur>lineages[b].cur?k:b,0);
+  if(running && lineages[best].cur>lastBest && !playing && performance.now()-lastTouch>4000){ lastBest=lineages[best].cur; selected=best; show(lineages[best].rule,'Lineage '+(best+1)+', latest'); }
+  renderPop(); renderLin(); drawChart(); }
+$('go').onclick=()=>{ halt(); showErr(''); params=readParams(); lineages=[]; selected=0; lastBest=-1;
+  const n=Math.max(1,Math.min(8,+$('nLin').value|0)); for(let k=0;k<n;k++) lineages.push({rule:new Uint8Array(SP.NC),i:0,sims:0,cur:0,imps:[],hist:[]});
+  setRunning(true); lineages.forEach(startLineage); refresh(); };
+$('cont').onclick=()=>{ if(!lineages.length) return; params={...params,budget:Math.max(100,+$('budget').value|0),pw:+$('pw').value}; setRunning(true); lineages.forEach(startLineage); };
+$('stop').onclick=()=>lineages.forEach(L=>{ if(L.worker) L.worker.postMessage({cmd:'stop'}); if(L.local) L.local.stop=true; });
+
+/* ---------- controls ---------- */
+function setK(k){ K=k; SP=G.makeSpace(K); $('ncDisp').value=SP.NC; $('budget').value=Math.max(3000,Math.round(SP.NC*8/1000)*1000);
+  const s2=$('seed2'); s2.textContent=''; for(let c=1;c<K;c++){ const o=document.createElement('option'); o.value=c; o.textContent=c===1?'Same as first':'Color '+c; s2.appendChild(o); }
+  const fc=$('fcolor'); fc.textContent=''; for(let c=1;c<K;c++){ const o=document.createElement('option'); o.value=c; o.textContent='Color '+c; fc.appendChild(o); }
+  halt(); lineages=[]; selected=-1; params=null; setRunning(false); buildPalUI();
+  const ex=(EXAMPLES[K]||[])[0]; if(ex) show(ex.rule,'Example 1'); else { const r=new Uint8Array(SP.NC); show(r,'The seed alone (null rule)'); }
+  renderPop(); renderLin(); drawChart(); $('pbar').style.width='0'; $('progress').textContent=''; }
+$('K').onchange=function(){ setK(+this.value); };
+['seedMode','sep','seed2'].forEach(id=>$(id).addEventListener('change',()=>{ if(shown) show(shown.rule,shown.label.replace(/ ·.*$/,'')); }));
+const FITNOTE={oscillate:'Rewards an exact repeating cycle: 1000 + 10 × period + half-width; a motionless still life scores 500. Until one appears, lifetime is rewarded. In tests most lineages found a cycle.',
+  twoseed:'Fitness is the shortest of three lifetimes: alone, and with a second seed 3 and 8 cells away. Slow: each mutant needs up to three full runs. In tests the winners were short and thin.',
+  damage:'Lifetime × share of four fixed single-cell deletions it shrugs off. In tests this learned those four deletions and did not become robust in general.'};
+$('ftype').onchange=function(){ $('colorPick').style.display=this.value==='color'?'':'none';
+  $('fitNote').textContent=(FITNOTE[this.value]?FITNOTE[this.value]+' Cutoff is capped at 100 for this design. ':'')+'Patterns that never die get fitness 0'+(this.value==='oscillate'?' unless they repeat exactly':'')+'. A mutation is kept if fitness doesn\'t decrease.'; };
+const sync=()=>{ $('maxV').textContent='· '+$('maxSteps').value; $('pwV').textContent='· '+(+$('pw').value).toFixed(2); }; $('maxSteps').oninput=sync; $('pw').oninput=sync; sync();
+$('copy').onclick=()=>{ const t=$('ruleBox'); t.select(); const done=()=>{ $('ruleNote').textContent='Rule copied.'; };
+  try{ navigator.clipboard.writeText(t.value).then(done,()=>{ $('ruleNote').textContent='Copy was blocked; the rule is selected, press Ctrl/Cmd+C.'; }); }catch(e){ $('ruleNote').textContent='Copy was blocked; the rule is selected, press Ctrl/Cmd+C.'; } };
+$('load').onclick=()=>{ const s=$('ruleBox').value.replace(/\s+/g,''); if(s.length!==SP.NC||!new RegExp('^[0-'+(K-1)+']+$').test(s)){ $('ruleNote').textContent='That is not a '+K+'-color rule: it needs exactly '+SP.NC+' digits from 0 to '+(K-1)+'.'; return; }
+  const r=Uint8Array.from(s,ch=>+ch); r[0]=0; show(r,'Pasted rule'); $('ruleNote').textContent='Loaded.'; };
+Object.keys(EXAMPLES).forEach(k=>EXAMPLES[k]=EXAMPLES[k].map(s=>({rule:Uint8Array.from(s,ch=>+ch)})));
+initGL(); setK(5);
+})();
+</script>
+</body>
+</html>

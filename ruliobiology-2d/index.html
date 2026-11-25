@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Evolving 1D cellular automata, after Stephen Wolfram's minimal model of biological evolution: each organism's whole life is one 2D picture.">
+<title>2D RulioOrganisms — Evolving 1D Cellular Automata</title>
+<style>
+  :root{ --bg:#fff; --ink:#1e1e1e; --muted:#8a8a8a; --line:#e6e6e6; --soft:#f6f6f4; --sel:#1e1e1e; color-scheme:light; }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:13px/1.4 -apple-system,"Segoe UI",system-ui,sans-serif}
+  #app{display:grid;grid-template-columns:300px 1fr;height:100%}
+  aside{padding:14px 16px 20px;overflow:auto;border-right:1px solid var(--line)}
+  h1{font-size:15px;margin:0}
+  .sub{color:var(--muted);margin:2px 0 6px;font-size:12px}
+  .links{font-size:12px;margin:0 0 10px} .links a{color:#3f7fc1;text-decoration:none} .links a:hover{text-decoration:underline}
+  h2{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600;margin:16px 0 6px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  h2 span{text-transform:none;letter-spacing:0;font-weight:400}
+  label.f{display:block;font-size:12px;color:#555;margin:7px 0 3px}
+  select,input[type=number],textarea{width:100%;padding:5px 7px;border:1px solid var(--line);border-radius:4px;font:inherit;background:#fff;color:var(--ink)}
+  textarea{height:54px;font-family:ui-monospace,monospace;font-size:10.5px;resize:vertical}
+  input[type=range]{width:100%;margin:2px 0}
+  .row{display:flex;gap:6px}.row>*{flex:1;min-width:0}
+  button{padding:7px 8px;border:1px solid var(--line);border-radius:4px;background:var(--soft);font:inherit;cursor:pointer;color:var(--ink)}
+  button:hover:not(:disabled){border-color:#bbb}
+  button:disabled{opacity:.45;cursor:default}
+  button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+  :focus-visible{outline:2px solid #3f7fc1;outline-offset:1px}
+  .note{font-size:11px;color:var(--muted);margin-top:3px}
+  canvas.panel{display:block;width:100%;border:1px solid var(--line);border-radius:4px;background:#fff}
+  .pal{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+  .pal input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-radius:4px;padding:1px;background:#fff;cursor:pointer}
+  .check{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:12px}
+  .stat{font-variant-numeric:tabular-nums;color:#555;font-size:12px;margin-top:8px}
+  main{display:grid;grid-template-rows:1fr auto auto;min-height:0;min-width:0}
+  #stage{position:relative;min-height:320px;overflow:hidden;background:#fff}
+  canvas#st{display:block;width:100%;height:100%;cursor:grab;touch-action:none;image-rendering:pixelated}
+  canvas#st:active{cursor:grabbing}
+  #topbar{position:absolute;left:12px;top:10px;display:flex;flex-direction:column;gap:6px;align-items:flex-start;pointer-events:none}
+  #topbar *{pointer-events:auto}
+  #title2d{font-size:12px;color:#555;background:rgba(255,255,255,.85);padding:1px 4px;border-radius:3px}
+  .vbtns{display:flex;gap:4px}
+  .vbtns button{padding:3px 8px;font-size:11.5px;background:rgba(255,255,255,.9)}
+  #probe{position:absolute;right:12px;top:12px;font-size:11px;color:#555;background:rgba(255,255,255,.9);border:1px solid var(--line);border-radius:4px;padding:4px 7px;font-variant-numeric:tabular-nums;display:none}
+  .hint{position:absolute;left:14px;bottom:10px;font-size:11px;color:var(--muted);background:rgba(255,255,255,.85);padding:1px 4px;border-radius:3px}
+  #time{display:flex;gap:10px;align-items:center;padding:8px 12px;border-top:1px solid var(--line)}
+  #time input{flex:1;min-width:0;accent-color:var(--ink)}
+  #time button{flex:0 0 auto;min-width:74px}
+  #tl{font-variant-numeric:tabular-nums;font-size:12px;color:#555;min-width:118px;text-align:right}
+  #bottom{border-top:1px solid var(--line);padding:8px 12px 10px;background:#fff;min-width:0}
+  .strip{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;min-height:74px}
+  .card{flex:0 0 auto;border:1px solid var(--line);border-radius:4px;padding:4px;cursor:pointer;background:#fff;text-align:center;font:inherit;color:inherit}
+  .card.sel{border-color:var(--sel);box-shadow:0 0 0 1px var(--sel)}
+  .card canvas{display:block;image-rendering:pixelated;margin:0 auto}
+  .card .lbl{font-size:10.5px;color:#555;margin-top:3px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .stripTitle{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:2px 0 5px}
+  #err{margin-top:8px;padding:7px 9px;border:1px solid #e3a59f;background:#fdf1ef;color:#8f2a22;border-radius:4px;font-size:12px}
+  #speedWrap{display:flex;gap:6px;align-items:center;font-size:12px;color:#555;flex:0 0 auto}
+  #speed{width:auto;padding:4px 6px}
+  .bar{height:3px;background:#eee;border-radius:2px;overflow:hidden;margin-top:6px}
+  .bar div{height:100%;width:0;background:#1e1e1e}
+  @media (max-width:900px){html,body{height:auto}#app{grid-template-columns:1fr;height:auto}aside{border:0}#stage{height:70vh}}
+</style>
+</head>
+<body>
+<div id="app">
+<aside>
+  <h1>2D RulioOrganisms</h1>
+  <div class="sub">1D cellular automata, evolved by single-point mutation. A row of cells grows from one seed; each step is drawn below the last, so an organism's whole life is one picture.</div>
+  <div class="links"><a href="../">&larr; Catalog</a> &middot; <a href="https://writings.stephenwolfram.com/2024/05/why-does-biological-evolution-work-a-minimal-model-for-biological-evolution-and-other-adaptive-processes/" target="_blank" rel="noopener">Wolfram&rsquo;s 1D model &#8599;</a> &middot; <a href="../ruliobiology/">3D</a> &middot; <a href="../ruliobiology-4d/">4D</a></div>
+
+  <h2>Rule space</h2>
+  <div class="row">
+    <div><label class="f" for="K">Colors</label>
+      <select id="K"><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option></select></div>
+    <div><label class="f" for="ncDisp">Rule cases</label><input id="ncDisp" type="number" disabled></div>
+  </div>
+  <div class="check"><input type="checkbox" id="sym" checked><label for="sym">Left–right symmetric rules</label></div>
+  <div class="note">A cell looks at itself and its two neighbours. With symmetry on, a case and its mirror image share one outcome, and organisms stay symmetric about the seed. The all-white case always stays white.</div>
+
+  <h2>Selection</h2>
+  <label class="f" for="ftype">Fitness</label>
+  <select id="ftype">
+    <option value="lifetime">Lifetime (steps before dying out)</option>
+    <option value="width">Maximum width</option>
+    <option value="tall">Long-lived &amp; slim (lifetime ÷ width)</option>
+    <option value="wide">Wide &amp; brief (width ÷ lifetime)</option>
+    <option value="mass">Bulk (cells per step)</option>
+    <option value="color">Fraction of one color</option>
+    <option value="oscillate">Stable oscillation (repeats forever, stays bounded)</option>
+  </select>
+  <div id="colorPick" style="display:none"><label class="f" for="fcolor">Color</label><select id="fcolor"></select></div>
+  <div class="note" id="fitNote">Patterns that never die get fitness 0. A mutation is kept if fitness doesn't decrease.</div>
+
+  <h2>Evolution</h2>
+  <div class="row">
+    <div><label class="f" for="nLin">Lineages</label><input type="number" id="nLin" min="1" max="12" value="6"></div>
+    <div><label class="f" for="budget">Mutations each</label><input type="number" id="budget" min="100" step="1000" value="10000"></div>
+  </div>
+  <label class="f" for="maxSteps">Immortality cutoff (max steps) <span id="maxV"></span></label>
+  <input type="range" id="maxSteps" min="50" max="800" step="25" value="400">
+  <div class="note">A mutant that never dies is run all the way to the cutoff. In 1D that is cheap, so the cutoff can be high.</div>
+  <label class="f" for="pw">Mutation bias toward white <span id="pwV"></span></label>
+  <input type="range" id="pw" min="0" max="0.95" step="0.05" value="0.35">
+  <div class="note" id="pwNote"></div>
+  <div class="row" style="margin-top:8px">
+    <button class="primary" id="go">Evolve new</button>
+    <button id="cont" disabled>Continue</button>
+    <button id="stop" disabled>Stop</button>
+  </div>
+  <div class="bar"><div id="pbar"></div></div>
+
+  <h2>Fitness <span id="progress"></span></h2>
+  <canvas class="panel" id="chart" width="536" height="220" style="height:110px"></canvas>
+  <div class="note">Gray = all lineages · dark line = selected lineage. Fitness rises in steps, with long plateaus of neutral drift between them.</div>
+
+  <h2>Genome <span id="genomeLbl"></span></h2>
+  <canvas class="panel" id="genome" width="536" height="200"></canvas>
+  <div class="note">One square per rule case, in rows by center color; its color is the outcome. Dark-edged = used by this organism.</div>
+
+  <h2>Colors</h2>
+  <div class="pal" id="pal"></div>
+  <div class="row" style="margin-top:6px"><button id="palReset">Reset colors</button></div>
+
+  <h2>View</h2>
+  <div class="check"><input type="checkbox" id="grid"><label for="grid">Cell grid when zoomed in</label></div>
+  <div class="check"><input type="checkbox" id="autogrow" checked><label for="autogrow">Grow each organism from its seed when shown</label></div>
+
+  <h2>Rule</h2>
+  <textarea id="ruleBox" aria-label="Rule digits" spellcheck="false"></textarea>
+  <div class="row" style="margin-top:6px"><button id="copy">Copy rule</button><button id="load">Load pasted rule</button></div>
+  <div class="note" id="ruleNote">One digit per rule case. Paste a rule for the current color count and symmetry, then press Load.</div>
+  <div id="err" role="alert" style="display:none"></div>
+  <div class="stat" id="stat"></div>
+</aside>
+<main>
+  <div id="stage">
+    <canvas id="st"></canvas>
+    <div id="topbar">
+      <div id="title2d"></div>
+      <div class="vbtns"><button data-v="fit">Fit</button><button data-v="1">1 px</button><button data-v="4">4 px</button><button data-v="10">10 px</button></div>
+    </div>
+    <div id="probe"></div>
+    <div class="hint">drag: pan · wheel: zoom · double-click: fit · ← → one step · shift + ← → ten steps · home / end · space: grow / pause</div>
+  </div>
+  <div id="time">
+    <button id="growBtn">▶ Grow</button>
+    <label id="speedWrap" for="speed">speed <select id="speed"><option value="4">4 steps/s</option><option value="10">10 steps/s</option><option value="25" selected>25 steps/s</option><option value="60">60 steps/s</option><option value="150">150 steps/s</option></select></label>
+    <input type="range" id="t" min="0" max="1" value="0" step="1" aria-label="Step">
+    <span id="tl"></span>
+  </div>
+  <div id="bottom">
+    <div class="stripTitle">Population (click to view)</div>
+    <div class="strip" id="pop"></div>
+    <div class="stripTitle" style="margin-top:6px">Selected lineage: each improvement (click to view)</div>
+    <div class="strip" id="lin"></div>
+  </div>
+</main>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+
+/* ---------- rule space ----------
+   A case is (left, centre, right). With symmetry, (l,c,r) and (r,c,l) are one case.
+   Cases are numbered centre-major so the genome panel can group them; case 0 is (white, white, white). */
+const spaces={};
+function makeSpace(K,sym){ const key=K+(sym?'s':'a'); if(spaces[key]) return spaces[key];
+  const N=K*K*K, CM=new Uint16Array(N), CEN=[], CASE=[], seen=new Map(); let NC=0;
+  for(let c=0;c<K;c++) for(let l=0;l<K;l++) for(let r=0;r<K;r++){
+    const a=sym?Math.min(l,r):l, b=sym?Math.max(l,r):r, k=(c*K+a)*K+b; let id=seen.get(k);
+    if(id===undefined){ id=NC++; seen.set(k,id); CEN.push(c); CASE.push([a,c,b]); }
+    CM[(l*K+c)*K+r]=id; }
+  // edge growth: a lone colour a at the boundary makes a new cell outside it through case (a,0,0) [or (0,0,a)]; if that chain
+  // never reaches white the organism grows forever, so it can be called immortal at once
+  const RIGHT=new Int32Array(K), LEFT=new Int32Array(K); for(let a=0;a<K;a++){ RIGHT[a]=CM[(a*K+0)*K+0]; LEFT[a]=CM[(0*K+0)*K+a]; }
+  let W=0, A=null, B=null, S=null;
+  function simulate(rule,maxSteps,opt){ opt=opt||{};
+    if(W!==2*maxSteps+7){ W=2*maxSteps+7; A=new Uint8Array(W); B=new Uint8Array(W); S=new Uint8Array(W); } else { A.fill(0); B.fill(0); S.fill(0); }
+    const usage=opt.usage?new Uint8Array(NC):null, rows=opt.rows?[]:null, cc=new Float64Array(K);
+    const grows=(E)=>{ const g=new Uint8Array(K); for(let a=1;a<K;a++){ let x=a, ok=1; for(let j=0;j<=K;j++){ x=rule[E[x]]; if(!x){ ok=0; break; } } g[a]=ok; } return g; }, immR=grows(RIGHT), immL=sym?immR:grows(LEFT);
+    const c0=W>>1; A[c0]=1; let lo=c0, hi=c0, blo=c0, bhi=c0, life=0, status=1, period=0, cells=1, maxW=1; cc[1]=1;
+    let sLo=c0, sHi=c0, power=1, lam=0; S[c0]=1; if(rows) rows.push({lo:0,d:Uint8Array.of(1)});
+    let a=A, b=B, minLo=c0, maxHi=c0;
+    for(let t=1;t<=maxSteps;t++){
+      if(immL[a[lo]]||immR[a[hi]]){ status=2; break; }
+      b.fill(0,blo,bhi+1); let nlo=W, nhi=-1;
+      for(let x=lo-1;x<=hi+1;x++){ const li=(a[x-1]*K+a[x])*K+a[x+1]; if(!li){ b[x]=0; continue; } const ci=CM[li], v=rule[ci]; b[x]=v; if(usage) usage[ci]=1;
+        if(v){ cells++; cc[v]++; if(x<nlo) nlo=x; if(x>nhi) nhi=x; } }
+      const T=a; a=b; b=T; blo=lo; bhi=hi; // b now holds the previous row, in [lo, hi]
+      if(nhi<0){ life=t; status=0; if(rows) rows.push({lo:0,d:new Uint8Array(0),dead:true}); break; }
+      lo=nlo; hi=nhi; if(hi-lo+1>maxW) maxW=hi-lo+1; if(lo<minLo) minLo=lo; if(hi>maxHi) maxHi=hi;
+      if(lo<2||hi>W-3){ status=1; break; }
+      if(rows) rows.push({lo:lo-c0,d:a.slice(lo,hi+1)});
+      // Brent's cycle check: compare with a saved row, re-saving it at powers of two
+      if(lo===sLo&&hi===sHi){ let same=true; for(let x=lo;x<=hi;x++) if(a[x]!==S[x]){ same=false; break; } if(same){ status=3; period=lam+1; break; } }
+      if(++lam===power){ S.fill(0,sLo,sHi+1); for(let x=lo;x<=hi;x++) S[x]=a[x]; sLo=lo; sHi=hi; power*=2; lam=0; }
+    }
+    return {life, status, period, maxWidth:maxW, cells, cc, usage, rows, left:minLo-c0, right:maxHi-c0};
+  }
+  return spaces[key]={K,sym,NC,CM,CEN,CASE,simulate};
+}
+
+/* ---------- fitness ---------- */
+function fitness(res,p){
+  if(p.type==='oscillate') return res.status===3&&res.period>1 ? res.period : 0;
+  if(res.status!==0) return 0;
+  switch(p.type){
+    case 'lifetime': return res.life;
+    case 'width': return res.maxWidth;
+    case 'tall': return res.life/res.maxWidth;
+    case 'wide': return res.maxWidth/res.life;
+    case 'mass': return res.cells/res.life;
+    case 'color': return res.cc[p.color]/res.cells;
+  } return 0; }
+
+/* ---------- state ---------- */
+let K=4, SYM=true, SP=makeSpace(K,SYM);
+const DEFAULT_PAL=['#ffffff','#d8433c','#f2bd2b','#5aa451','#7d4fb0','#3f7fc1'];
+let PAL=DEFAULT_PAL.slice();
+let lineages=[], selected=0, running=false, shown=null, step=0, params=null;
+const RGB=()=>PAL.map(h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
+const dispCut=()=>+$('maxSteps').value;
+
+function buildPalUI(){ const el=$('pal'); el.textContent='';
+  for(let c=1;c<K;c++){ const inp=document.createElement('input'); inp.type='color'; inp.value=PAL[c]; inp.setAttribute('aria-label','Color '+c);
+    inp.oninput=()=>{ PAL[c]=inp.value; onPalette(); }; el.appendChild(inp); }
+  const fc=$('fcolor'); fc.textContent=''; for(let c=1;c<K;c++){ const o=document.createElement('option'); o.value=c; o.textContent='Color '+c; fc.appendChild(o); } }
+function onPalette(){ if(shown){ paintImage(); draw(); drawGenome(); } renderPop(); renderLin(); }
+function setSpace(){ K=+$('K').value; SYM=$('sym').checked; SP=makeSpace(K,SYM); $('ncDisp').value=SP.NC; buildPalUI(); updPw(); }
+function updPw(){ const pw=+$('pw').value, uni=1/(K-1); $('pwV').textContent=pw.toFixed(2);
+  $('pwNote').textContent=`${uni.toFixed(2)} ≈ uniform over the ${K-1} other colors. Higher values favour mutations that switch a case off, which keeps unused cases from drifting into explosive rules.`; }
+
+/* ---------- the organism picture ---------- */
+const img=document.createElement('canvas'); // one pixel per cell per step
+function paintImage(){ const res=shown.res, rows=res.rows, w=res.right-res.left+1, h=rows.length; img.width=Math.max(1,w); img.height=Math.max(1,h);
+  const ctx=img.getContext('2d'), im=ctx.createImageData(img.width,img.height), d=im.data, rgb=RGB();
+  for(let i=0;i<d.length;i+=4){ d[i]=d[i+1]=d[i+2]=255; d[i+3]=255; }
+  rows.forEach((r,y)=>{ for(let k=0;k<r.d.length;k++){ const v=r.d[k]; if(!v) continue; const x=r.lo+k-res.left, o=(y*img.width+x)*4; const c=rgb[v]; d[o]=c[0]; d[o+1]=c[1]; d[o+2]=c[2]; } });
+  ctx.putImageData(im,0,0); }
+const view={s:1,x:0,y:0,fit:true};
+const st=$('st'), sctx=st.getContext('2d');
+function sizeStage(){ const r=$('stage').getBoundingClientRect(), dpr=Math.min(2,window.devicePixelRatio||1); st.width=Math.round(r.width*dpr); st.height=Math.round(r.height*dpr); st._dpr=dpr; }
+function fitView(){ if(!shown) return; const W=st.width, H=st.height, m=40*st._dpr; const s=Math.min((W-m*2)/img.width,(H-m*2)/img.height);
+  view.s=s>=1?Math.floor(s):s; view.x=(W-img.width*view.s)/2; view.y=Math.max(m,(H-img.height*view.s)/2); view.fit=true; }
+function setScale(px){ if(!shown) return; const W=st.width, cx=W/2, cy=st.height/2, ox=(cx-view.x)/view.s, oy=(cy-view.y)/view.s; view.s=px*st._dpr; view.x=cx-ox*view.s; view.y=Math.min(40*st._dpr,cy-oy*view.s); view.fit=false; draw(); }
+function draw(){ const W=st.width, H=st.height; sctx.fillStyle='#fff'; sctx.fillRect(0,0,W,H); if(!shown) return;
+  const rows=Math.min(step+1,img.height); sctx.imageSmoothingEnabled=false;
+  sctx.drawImage(img,0,0,img.width,rows,view.x,view.y,img.width*view.s,rows*view.s);
+  sctx.strokeStyle='#e6e6e6'; sctx.lineWidth=1; sctx.strokeRect(Math.round(view.x)-.5,Math.round(view.y)-.5,Math.round(img.width*view.s)+1,Math.round(img.height*view.s)+1);
+  if($('grid').checked&&view.s>=8){ sctx.strokeStyle='rgba(0,0,0,.08)'; sctx.beginPath(); for(let x=0;x<=img.width;x++){ const X=Math.round(view.x+x*view.s)+.5; sctx.moveTo(X,view.y); sctx.lineTo(X,view.y+rows*view.s); }
+    for(let y=0;y<=rows;y++){ const Y=Math.round(view.y+y*view.s)+.5; sctx.moveTo(view.x,Y); sctx.lineTo(view.x+img.width*view.s,Y); } sctx.stroke(); }
+  // the current step's row
+  if(step<img.height-1){ sctx.fillStyle='rgba(30,30,30,.55)'; sctx.fillRect(view.x-6*st._dpr,view.y+step*view.s,4*st._dpr,Math.max(1,view.s)); }
+  $('t').value=step; const res=shown.res; $('tl').textContent='step '+step+' / '+(rowsTotal()-1)+(res.status===0&&step>=rowsTotal()-1?' · dead':''); }
+const rowsTotal=()=>shown?shown.res.rows.length:1;
+function setStep(s){ step=Math.max(0,Math.min(rowsTotal()-1,s)); draw(); }
+
+/* ---------- show an organism ---------- */
+function show(rule,label){ const res=SP.simulate(rule,dispCut(),{rows:true,usage:true}); shown={rule:Uint8Array.from(rule),res,label};
+  paintImage(); $('t').max=Math.max(1,res.rows.length-1); if(view.fit||!view.s) fitView();
+  const used=res.usage.reduce((a,b)=>a+b,0), fate=res.status===0?'dies at step '+res.life:res.status===3?'repeats with period '+res.period:res.status===2?'grows forever':'still alive at the cutoff';
+  $('title2d').textContent=label+' — '+fate; $('stat').textContent=(res.status===0?'lifetime '+res.life:'lifetime ∞')+' · widest '+res.maxWidth+' cells · '+res.cells.toLocaleString()+' cell-steps · '+used+' of '+SP.NC+' cases used';
+  $('ruleBox').value=Array.from(rule).join(''); drawGenome();
+  if($('autogrow').checked&&res.rows.length>2){ step=0; startGrow(); } else setStep(res.rows.length-1); }
+function drawGenome(){ const cv=$('genome'), ctx=cv.getContext('2d'), NC=SP.NC; if(!shown) return;
+  const perRow=[]; for(let i=0;i<NC;i++) perRow[SP.CEN[i]]=(perRow[SP.CEN[i]]||0)+1; const maxRow=Math.max(...perRow);
+  const s=Math.max(6,Math.min(28,Math.floor(530/maxRow))); cv.height=K*(s+6)+4; cv.style.height=(cv.height/2)+'px';
+  ctx.fillStyle='#fff'; ctx.fillRect(0,0,cv.width,cv.height); const xs=new Array(K).fill(0);
+  for(let i=0;i<NC;i++){ const c=SP.CEN[i], x=xs[c], y=c*(s+6)+2; xs[c]+=s;
+    ctx.fillStyle=shown.rule[i]?PAL[shown.rule[i]]:'#f1f1ee'; ctx.fillRect(x+0.5,y+0.5,s-1,s-1);
+    if(shown.res.usage[i]){ ctx.strokeStyle='#1e1e1e'; ctx.lineWidth=1; ctx.strokeRect(x+0.5,y+0.5,s-1,s-1); } }
+  $('genomeLbl').textContent=NC+' cases'; }
+
+/* ---------- grow / scrub ---------- */
+let growing=false, gAcc=0, gLast=0;
+function startGrow(){ if(!shown) return; if(step>=rowsTotal()-1) step=0; growing=true; $('growBtn').textContent='❚❚ Pause'; gLast=performance.now(); gAcc=0; requestAnimationFrame(growTick); }
+function stopGrow(){ growing=false; $('growBtn').textContent='▶ Grow'; }
+function growTick(ts){ if(!growing) return; gAcc+=(ts-gLast)/1000*(+$('speed').value); gLast=ts; const n=Math.floor(gAcc); if(n){ gAcc-=n; setStep(step+n); }
+  if(step>=rowsTotal()-1){ stopGrow(); return; } requestAnimationFrame(growTick); }
+$('growBtn').onclick=()=>growing?stopGrow():startGrow();
+$('t').oninput=()=>{ stopGrow(); setStep(+$('t').value); };
+
+/* ---------- strips ---------- */
+function thumb(rule,h){ const res=SP.simulate(rule,dispCut(),{rows:true}), cv=document.createElement('canvas'), w=res.right-res.left+1, rows=res.rows.length;
+  cv.width=Math.max(1,w); cv.height=Math.max(1,rows); const ctx=cv.getContext('2d'), rgb=RGB(), im=ctx.createImageData(cv.width,cv.height), d=im.data;
+  for(let i=0;i<d.length;i+=4){ d[i]=d[i+1]=d[i+2]=255; d[i+3]=255; }
+  res.rows.forEach((r,y)=>{ for(let k=0;k<r.d.length;k++){ const v=r.d[k]; if(!v) continue; const o=(y*cv.width+r.lo+k-res.left)*4, c=rgb[v]; d[o]=c[0]; d[o+1]=c[1]; d[o+2]=c[2]; } });
+  ctx.putImageData(im,0,0); const sc=Math.min(h/cv.height,90/cv.width); cv.style.height=Math.max(4,Math.round(cv.height*sc))+'px'; cv.style.width=Math.max(4,Math.round(cv.width*sc))+'px'; cv.style.minHeight='4px'; return cv; }
+function card(rule,lbl,sel,onclick){ const b=document.createElement('button'); b.type='button'; b.className='card'+(sel?' sel':''); const wrap=document.createElement('div'); wrap.style.cssText='height:44px;display:flex;align-items:center;justify-content:center;min-width:34px';
+  wrap.appendChild(thumb(rule,44)); b.appendChild(wrap); const d=document.createElement('div'); d.className='lbl'; d.textContent=lbl; b.appendChild(d); b.onclick=onclick; return b; }
+const fmt=f=>f>=100?f.toFixed(0):f>=10?f.toFixed(1):f.toFixed(2);
+function renderPop(){ const el=$('pop'); el.textContent=''; lineages.forEach((L,k)=>el.appendChild(card(L.rule,'L'+(k+1)+' · '+fmt(L.cur),k===selected,()=>{ selected=k; show(L.rule,'Lineage '+(k+1)+', latest'); renderPop(); renderLin(); drawChart(); }))); }
+function renderLin(){ const el=$('lin'); el.textContent=''; const L=lineages[selected]; if(!L) return;
+  L.imps.slice(-40).forEach(im=>el.appendChild(card(im.rule,'#'+im.i+' · '+fmt(im.f),false,()=>{ stopGrow(); show(im.rule,'Lineage '+(selected+1)+' at mutation '+im.i); }))); el.scrollLeft=el.scrollWidth; }
+
+/* ---------- chart ---------- */
+function drawChart(){ const cv=$('chart'), ctx=cv.getContext('2d'), W=cv.width, H=cv.height; ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H); if(!lineages.length) return;
+  let maxF=1e-9, maxI=1; lineages.forEach(L=>{ maxI=Math.max(maxI,L.i); L.hist.forEach(p=>{ if(p[1]>maxF) maxF=p[1]; }); });
+  const X=i=>36+(W-46)*i/maxI, Y=f=>H-18-(H-30)*f/maxF;
+  ctx.strokeStyle='#e6e6e6'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(36,H-18); ctx.lineTo(W-10,H-18); ctx.stroke();
+  ctx.fillStyle='#8a8a8a'; ctx.font='20px sans-serif'; ctx.fillText(fmt(maxF),2,22); ctx.fillText('0',20,H-18); ctx.fillText(maxI.toLocaleString()+' mutations',W-190,H-1);
+  const line=(L,c,w)=>{ ctx.strokeStyle=c; ctx.lineWidth=w; ctx.beginPath(); let f=0; ctx.moveTo(X(0),Y(0)); L.hist.forEach(p=>{ ctx.lineTo(X(p[0]),Y(f)); ctx.lineTo(X(p[0]),Y(p[1])); f=p[1]; }); ctx.lineTo(X(L.i),Y(f)); ctx.stroke(); };
+  lineages.forEach((L,k)=>{ if(k!==selected) line(L,'#c9c9c9',2); }); if(lineages[selected]) line(lineages[selected],'#1e1e1e',3); }
+
+/* ---------- evolution: runs in the page, a slice of each frame ---------- */
+function readParams(){ return {K, sym:SYM, type:$('ftype').value, color:+$('fcolor').value||1, maxSteps:+$('maxSteps').value, pw:+$('pw').value, budget:Math.max(100,+$('budget').value|0)}; }
+function mutate(rule,p){ const r=Uint8Array.from(rule), i=1+Math.floor(Math.random()*(SP.NC-1)), cur=r[i];
+  if(cur&&Math.random()<p.pw){ r[i]=0; return r; }
+  const opts=[]; for(let v=0;v<K;v++) if(v!==cur&&!(cur&&v===0&&p.pw>0)) opts.push(v); r[i]=opts.length?opts[Math.floor(Math.random()*opts.length)]:0; return r; }
+function newLineage(p){ const rule=new Uint8Array(SP.NC); const f=fitness(SP.simulate(rule,p.maxSteps),p); return {rule,cur:f,i:0,hist:[[0,f]],imps:[{i:0,f,rule:Uint8Array.from(rule)}],goal:p.budget}; }
+let lastUI=0, dirtySel=false;
+function pump(){ if(!running) return; const t0=performance.now(); let busy=false;
+  while(performance.now()-t0<14){ busy=false;
+    for(let k=0;k<lineages.length;k++){ const L=lineages[k]; if(L.i>=L.goal) continue; busy=true;
+      for(let n=0;n<20&&L.i<L.goal;n++){ const r=mutate(L.rule,params); L.i++; const f=fitness(SP.simulate(r,params.maxSteps),params);
+        if(f>=L.cur){ if(f>L.cur){ L.hist.push([L.i,f]); L.imps.push({i:L.i,f,rule:Uint8Array.from(r)}); if(k===selected) dirtySel=true; } L.rule=r; L.cur=f; } } }
+    if(!busy) break; }
+  const done=lineages.reduce((a,L)=>a+Math.min(L.i,L.goal),0), goal=lineages.reduce((a,L)=>a+L.goal,0);
+  $('pbar').style.width=(100*done/Math.max(1,goal)).toFixed(1)+'%'; $('progress').textContent=done.toLocaleString()+' / '+goal.toLocaleString();
+  const now=performance.now(); if(now-lastUI>350||!busy){ lastUI=now; drawChart(); renderPop(); if(dirtySel){ dirtySel=false; renderLin(); const L=lineages[selected]; if(!growing) show(L.rule,'Lineage '+(selected+1)+', latest'); } }
+  if(busy) requestAnimationFrame(pump); else finish(); }
+function finish(){ running=false; $('go').disabled=false; $('cont').disabled=!lineages.length; $('stop').disabled=true;
+  // show the fittest lineage
+  let best=0; lineages.forEach((L,k)=>{ if(L.cur>lineages[best].cur) best=k; }); selected=best; drawChart(); renderPop(); renderLin(); const L=lineages[best]; if(L) show(L.rule,'Lineage '+(best+1)+', latest'); }
+function start(fresh){ $('err').style.display='none'; params=readParams(); if(fresh||!lineages.length){ setSpace(); params=readParams(); const n=Math.max(1,Math.min(12,+$('nLin').value|0)); lineages=[]; for(let k=0;k<n;k++) lineages.push(newLineage(params)); selected=0; }
+  else lineages.forEach(L=>L.goal=L.i+params.budget);
+  running=true; $('go').disabled=true; $('cont').disabled=true; $('stop').disabled=false; requestAnimationFrame(pump); }
+$('go').onclick=()=>start(true); $('cont').onclick=()=>start(false); $('stop').onclick=()=>{ running=false; finish(); };
+
+/* ---------- controls ---------- */
+$('K').onchange=$('sym').onchange=()=>{ running=false; setSpace(); lineages=[]; renderPop(); renderLin(); drawChart(); start(true); };
+$('ftype').onchange=()=>{ $('colorPick').style.display=$('ftype').value==='color'?'block':'none';
+  $('fitNote').textContent=$('ftype').value==='oscillate'?'Patterns that die, or that never repeat, get fitness 0. Fitness is the period of the repeat.':'Patterns that never die get fitness 0. A mutation is kept if fitness doesn’t decrease.'; };
+$('maxSteps').oninput=()=>{ $('maxV').textContent=$('maxSteps').value; }; $('maxV').textContent=$('maxSteps').value;
+$('pw').oninput=updPw;
+$('palReset').onclick=()=>{ PAL=DEFAULT_PAL.slice(); buildPalUI(); onPalette(); };
+$('grid').onchange=draw;
+$('copy').onclick=()=>{ const v=$('ruleBox').value; try{ navigator.clipboard.writeText(v).then(()=>{ $('copy').textContent='Copied ✓'; setTimeout(()=>$('copy').textContent='Copy rule',1200); }); }catch(e){ $('ruleBox').select(); } };
+$('load').onclick=()=>{ const s=$('ruleBox').value.replace(/\s/g,''); const e=$('err');
+  if(s.length!==SP.NC||/[^0-9]/.test(s)||[...s].some(ch=>+ch>=K)){ e.textContent=`A rule here needs exactly ${SP.NC} digits, each from 0 to ${K-1}.`; e.style.display='block'; return; }
+  if(s[0]!=='0'){ e.textContent='The first digit is the all-white case and must be 0.'; e.style.display='block'; return; }
+  e.style.display='none'; stopGrow(); show(Uint8Array.from(s,ch=>+ch),'Pasted rule'); };
+document.querySelectorAll('.vbtns button').forEach(b=>b.onclick=()=>{ const v=b.dataset.v; if(v==='fit'){ fitView(); draw(); } else setScale(+v); });
+
+/* ---------- pan / zoom / keys ---------- */
+let drag=null;
+st.addEventListener('pointerdown',e=>{ drag={x:e.clientX,y:e.clientY,vx:view.x,vy:view.y}; st.setPointerCapture(e.pointerId); });
+st.addEventListener('pointermove',e=>{ const dpr=st._dpr;
+  if(drag){ view.x=drag.vx+(e.clientX-drag.x)*dpr; view.y=drag.vy+(e.clientY-drag.y)*dpr; view.fit=false; draw(); return; }
+  if(!shown) return; const r=st.getBoundingClientRect(), px=((e.clientX-r.left)*dpr-view.x)/view.s, py=((e.clientY-r.top)*dpr-view.y)/view.s, x=Math.floor(px), y=Math.floor(py);
+  const p=$('probe'); if(x<0||y<0||x>=img.width||y>=img.height){ p.style.display='none'; return; }
+  const row=shown.res.rows[y], k=x+shown.res.left-row.lo, v=k>=0&&k<row.d.length?row.d[k]:0; p.style.display='block'; p.textContent='step '+y+' · cell '+(x+shown.res.left)+' · color '+v; });
+st.addEventListener('pointerup',()=>{ drag=null; }); st.addEventListener('pointerleave',()=>{ $('probe').style.display='none'; });
+st.addEventListener('wheel',e=>{ e.preventDefault(); const r=st.getBoundingClientRect(), dpr=st._dpr, mx=(e.clientX-r.left)*dpr, my=(e.clientY-r.top)*dpr, k=Math.exp(-e.deltaY*0.0015);
+  const ns=Math.max(0.05,Math.min(80*dpr,view.s*k)); view.x=mx-(mx-view.x)*ns/view.s; view.y=my-(my-view.y)*ns/view.s; view.s=ns; view.fit=false; draw(); },{passive:false});
+st.addEventListener('dblclick',()=>{ fitView(); draw(); });
+window.addEventListener('keydown',e=>{ if(/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  if(e.key==='ArrowRight'){ stopGrow(); setStep(step+(e.shiftKey?10:1)); e.preventDefault(); }
+  else if(e.key==='ArrowLeft'){ stopGrow(); setStep(step-(e.shiftKey?10:1)); e.preventDefault(); }
+  else if(e.key==='Home'){ stopGrow(); setStep(0); } else if(e.key==='End'){ stopGrow(); setStep(rowsTotal()-1); }
+  else if(e.key===' '){ e.preventDefault(); growing?stopGrow():startGrow(); } });
+window.addEventListener('resize',()=>{ sizeStage(); if(view.fit) fitView(); draw(); });
+
+/* ---------- start: evolve a fresh population straight away ---------- */
+sizeStage(); setSpace(); $('ftype').onchange(); start(true);
+</script>
+</body>
+</html>

@@ -76,7 +76,7 @@
 <div id="edbar"><b style="color:#e6b422">EDITING LAYOUT</b> <span style="opacity:.7">drag from the list onto a tile: middle replaces, near an edge splits · drag tiles to swap or move · drag back to the list to remove · drag gutters to resize</span> <button id="ed-undo">undo</button> <button id="ed-export">export</button> <button id="ed-import">import</button> <button id="ed-asp-p">▯ phone</button><button id="ed-asp-l">▭ desktop</button> <button id="ed-clear">clear board</button> <button id="ed-default">load default</button> <button id="ed-done">done</button> <span id="ed-status" style="opacity:.75"></span></div>
 <div id="stage"><canvas id="out"></canvas></div>
 <div id="foot">Finn Mulligan · New York · <a id="cat-link" href="../">list view</a> · <a href="mailto:finnmulligan55@gmail.com">finnmulligan55@gmail.com</a> · <a href="https://www.linkedin.com/in/finn-mulligan-27aa07206">LinkedIn</a></div>
-<div id="corner"><a id="c-list" href="../" title="back to the list view" style="text-decoration:none"><button tabindex="-1">☰</button></a><button id="c-reroll" title="reroll the whole page">⟳ reroll</button><button id="c-snd" title="sound">♪</button><button id="c-edit" title="edit layout">✎</button><button id="c-ui" title="controls">⚙</button></div>
+<div id="corner" style="display:none"><a id="c-list" href="../" title="back to the list view" style="text-decoration:none"><button tabindex="-1">☰</button></a><button id="c-reroll" title="reroll the whole page">⟳ reroll</button><button id="c-snd" title="sound">♪</button><button id="c-edit" title="edit layout">✎</button><button id="c-ui" title="controls">⚙</button></div>
 <div id="tip"></div>
 <div id="edpanel"></div>
 <div id="modal"></div>
@@ -277,21 +277,217 @@ SCENES.rulio2d={ keepColour:true, title:'RULIOORGANISM 2D', family:'rulio', mode
     ctx.fillStyle=s.shade[1]; ctx.fillRect(2,h-3,w-4,1); ctx.fillStyle=s.text; ctx.fillRect(2,h-3,Math.round((w-4)*Math.min(1,s.f/n)),1);
     drawText(ctx,2,h-9,'T '+Math.min(s.f,n)+'/'+s.shown.life+'  GEN '+s.shown.gen,s.text,w-4); s.f++; } };
 
+// 3D: symmetric 3D cellular automata (a cell sees itself and its six face neighbours, all 48 cube symmetries alike),
+// using the 4D RulioOrganisms page's own engine. The tile grows each champion's body step by step while it turns.
+const RULIO4D=(()=>{ const G={};
+
+function core(G){
+  const spaces={};
+  // Case = (centre; six face-neighbours up to the 48 cube symmetries). Canonical form: sort each opposite pair, then
+  // sort the three pairs. Cases are numbered in order of first appearance (same numbering as the Python engine).
+  function makeSpace(K){
+    if(spaces[K]) return spaces[K];
+    const K2=K*K,K3=K2*K,K4=K3*K,K5=K4*K,K6=K5*K,N=K6*K;
+    const CM=new Uint16Array(N), seen=new Map(), CEN=[]; let NC=0; const n=[0,0,0,0,0,0], pr=[0,0,0];
+    for(let li=0;li<N;li++){
+      const c=Math.floor(li/K6); let r=li%K6;
+      for(let p=5;p>=0;p--){ n[p]=r%K; r=Math.floor(r/K); }
+      for(let a=0;a<3;a++){ const u=n[2*a],v=n[2*a+1]; pr[a]= u<v ? u*K+v : v*K+u; }
+      pr.sort((x,y)=>x-y);
+      const key=((c*K2+pr[0])*K2+pr[1])*K2+pr[2]; let id=seen.get(key);
+      if(id===undefined){ id=NC++; seen.set(key,id); CEN.push(c); }
+      CM[li]=id;
+    }
+    const EDGE=new Int32Array(K); for(let a=1;a<K;a++) EDGE[a]=CM[a*K5];
+    let W=0,W2=0,A=null,B=null,S=null,dirty=0;
+    function simulate(rule,maxSteps,opt){
+      opt=opt||{};
+      if(W!==maxSteps+3){ W=maxSteps+3; W2=W*W; A=new Uint8Array(W*W2); B=new Uint8Array(W*W2); S=new Uint8Array(W*W2); dirty=0; }
+      else { const d=Math.min(W-1,dirty+2); for(let z=0;z<=d;z++) for(let y=0;y<=d;y++){ const b=z*W2+y*W; A.fill(0,b,b+d+1); B.fill(0,b,b+d+1); S.fill(0,b,b+d+1); } dirty=0; }
+      const usage=opt.usage?new Uint8Array(NC):null, layers=opt.layers?[]:null, cc=new Float64Array(K);
+      const imm=new Uint8Array(K);
+      for(let a=1;a<K;a++){ let x=a, ok=1; for(let j=0;j<=K;j++){ x=rule[EDGE[x]]; if(!x){ ok=0; break; } } imm[a]=ok; }
+      let a=A,b=B, ext=0, pext=0, sExt=0, power=1, lam=0, cells=1, maxExt=0, life=0, status=1, period=0; cc[1]=1;
+      a[0]=1; S[0]=1;
+      const snap=(e)=>{ const m=e+1, q=new Uint8Array(m*m*m); for(let z=0;z<m;z++) for(let y=0;y<m;y++){ const s=z*W2+y*W; for(let x=0;x<m;x++) q[(z*m+y)*m+x]=a[s+x]; } layers.push({e,q}); };
+      if(layers) snap(0);
+      outer:
+      for(let t=1;t<=maxSteps;t++){
+        if(!opt.noEdge){ for(let z=0;z<=ext;z++) for(let y=0;y<=ext;y++) if(imm[a[z*W2+y*W+ext]]){ status=2; break outer; } }
+        const R=Math.min(Math.max(ext+1,pext),W-2); let ne=-1; if(R>dirty) dirty=R;
+        for(let z=0;z<=R;z++) for(let y=0;y<=R;y++){ const base=z*W2+y*W;
+          for(let x=0;x<=R;x++){ const i=base+x, c=a[i], xp=a[i+1], xm=x?a[i-1]:xp, yp=a[i+W], ym=y?a[i-W]:yp, zp=a[i+W2], zm=z?a[i-W2]:zp;
+            const li=c*K6+xm*K5+xp*K4+ym*K3+yp*K2+zm*K+zp;
+            if(!li){ b[i]=0; continue; }
+            const ci=CM[li], v=rule[ci]; b[i]=v; if(usage) usage[ci]=1;
+            if(v){ const w=(x?2:1)*(y?2:1)*(z?2:1); cells+=w; cc[v]+=w; if(x>ne) ne=x; if(y>ne) ne=y; if(z>ne) ne=z; } } }
+        pext=ext; ext=ne; const T=a; a=b; b=T;
+        if(ne<0){ life=t; status=0; break; }
+        if(ne>maxExt) maxExt=ne;
+        if(layers) snap(ne);
+        if(ne===sExt){ let same=true; chk: for(let z=0;z<=ne;z++) for(let y=0;y<=ne;y++){ const s=z*W2+y*W; for(let x=0;x<=ne;x++) if(a[s+x]!==S[s+x]){ same=false; break chk; } }
+          if(same){ status=3; period=lam+1; break; } }
+        if(++lam===power){ for(let z=0;z<=sExt;z++) for(let y=0;y<=sExt;y++){ const s=z*W2+y*W; S.fill(0,s,s+sExt+1); }
+          for(let z=0;z<=ne;z++) for(let y=0;y<=ne;y++){ const s=z*W2+y*W; for(let x=0;x<=ne;x++) S[s+x]=a[s+x]; } sExt=ne; power*=2; lam=0; }
+      }
+      if(dirty<maxExt+1) dirty=maxExt+1;
+      return {life, status, period, maxExt, maxWidth:2*maxExt+1, cells, cc, usage, layers};
+    }
+    // Full lattice, no symmetry assumed: several seeds, or one cell deleted mid-life. Port of the verified Python `full`.
+    let FN=0,FA=null,FB=null,FS=null,fd=null;
+    function full(rule,seeds,cut,dmg,usage){
+      let span=0; for(const s of seeds) span=Math.max(span,Math.abs(s[0]),Math.abs(s[1]),Math.abs(s[2]));
+      const N=2*(cut+3)+2*span+1, c0=cut+3+span, N2=N*N;
+      if(FN!==N){ FN=N; FA=new Uint8Array(N*N2); FB=new Uint8Array(N*N2); FS=new Uint8Array(N*N2); fd=null; }
+      else if(fd){ for(let z=fd[4];z<=fd[5];z++) for(let y=fd[2];y<=fd[3];y++){ const b=z*N2+y*N; FA.fill(0,b+fd[0],b+fd[1]+1); FB.fill(0,b+fd[0],b+fd[1]+1); FS.fill(0,b+fd[0],b+fd[1]+1); } }
+      const A=FA,B=FB,S=FS, imm=new Uint8Array(K);
+      for(let a=1;a<K;a++){ let x=a, ok=1; for(let j=0;j<=K;j++){ x=rule[EDGE[x]]; if(!x){ ok=0; break; } } imm[a]=ok; }
+      let x0=N,x1=-1,y0=N,y1=-1,z0=N,z1=-1;
+      for(const s of seeds){ const x=c0+s[0],y=c0+s[1],z=c0+s[2]; A[z*N2+y*N+x]=1; if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; if(z<z0)z0=z; if(z>z1)z1=z; }
+      const cx=c0+seeds[0][0], cy=c0+seeds[0][1], cz=c0+seeds[0][2];
+      fd=[x0-1,x1+1,y0-1,y1+1,z0-1,z1+1]; const grow=()=>{ if(x0-1<fd[0])fd[0]=x0-1; if(x1+1>fd[1])fd[1]=x1+1; if(y0-1<fd[2])fd[2]=y0-1; if(y1+1>fd[3])fd[3]=y1+1; if(z0-1<fd[4])fd[4]=z0-1; if(z1+1>fd[5])fd[5]=z1+1; };
+      let sb=null, power=1, lam=0, maxExt=0, dmgOk=0, t=0;
+      const out=(life,status,period)=>({life,status,period,maxExt,dmgOk});
+      for(;;){
+        if(dmg && t===dmg.step){ let best=-1, bi=-1, cnt=0;
+          for(let z=z0;z<=z1;z++) for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){ const i=z*N2+y*N+x; if(!A[i]) continue;
+            const d=Math.max(Math.abs(x-cx),Math.abs(y-cy),Math.abs(z-cz));
+            if(dmg.which===0){ if(best<0||d<best){ best=d; bi=i; } } else if(dmg.which===1){ if(d>best){ best=d; bi=i; } } else { if(cnt===-1){} cnt++; } }
+          if(dmg.which===2 && cnt>0){ const want=dmg.k%cnt; cnt=0; for(let z=z0;z<=z1;z++) for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){ const i=z*N2+y*N+x; if(A[i]){ if(cnt===want) bi=i; cnt++; } } }
+          if(bi>=0){ A[bi]=0; dmgOk=1; } sb=null; power=1; lam=0; }
+        for(let z=z0;z<=z1;z++) for(let y=y0;y<=y1;y++) if(imm[A[z*N2+y*N+x0]]||imm[A[z*N2+y*N+x1]]) return out(0,2,0);
+        for(let z=z0;z<=z1;z++) for(let x=x0;x<=x1;x++) if(imm[A[z*N2+y0*N+x]]||imm[A[z*N2+y1*N+x]]) return out(0,2,0);
+        for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++) if(imm[A[z0*N2+y*N+x]]||imm[A[z1*N2+y*N+x]]) return out(0,2,0);
+        if(t>=cut) return out(0,1,0);
+        let nx0=N,nx1=-1,ny0=N,ny1=-1,nz0=N,nz1=-1;
+        for(let z=z0-1;z<=z1+1;z++) for(let y=y0-1;y<=y1+1;y++){ const base=z*N2+y*N;
+          for(let x=x0-1;x<=x1+1;x++){ const i=base+x, li=A[i]*K6+A[i-1]*K5+A[i+1]*K4+A[i-N]*K3+A[i+N]*K2+A[i-N2]*K+A[i+N2];
+            if(!li){ B[i]=0; continue; } const ci=CM[li]; usage[ci]=1; const v=rule[ci]; B[i]=v;
+            if(v){ if(x<nx0)nx0=x; if(x>nx1)nx1=x; if(y<ny0)ny0=y; if(y>ny1)ny1=y; if(z<nz0)nz0=z; if(z>nz1)nz1=z; } } }
+        for(let z=z0-1;z<=z1+1;z++) for(let y=y0-1;y<=y1+1;y++){ const base=z*N2+y*N; for(let x=x0-1;x<=x1+1;x++){ A[base+x]=B[base+x]; B[base+x]=0; } }
+        t++;
+        if(nx1<0) return out(t,0,0);
+        x0=nx0; x1=nx1; y0=ny0; y1=ny1; z0=nz0; z1=nz1; grow();
+        const e=Math.max(x1-cx,cx-x0,y1-cy,cy-y0,z1-cz,cz-z0); if(e>maxExt) maxExt=e;
+        if(sb && sb[0]===x0&&sb[1]===x1&&sb[2]===y0&&sb[3]===y1&&sb[4]===z0&&sb[5]===z1){ let same=true;
+          chk: for(let z=z0;z<=z1;z++) for(let y=y0;y<=y1;y++){ const base=z*N2+y*N; for(let x=x0;x<=x1;x++) if(A[base+x]!==S[base+x]){ same=false; break chk; } }
+          if(same) return out(0,3,lam+1); }
+        lam++;
+        if(lam===power||!sb){
+          if(sb){ for(let z=sb[4];z<=sb[5];z++) for(let y=sb[2];y<=sb[3];y++){ const base=z*N2+y*N; S.fill(0,base+sb[0],base+sb[1]+1); } power*=2; }
+          for(let z=z0;z<=z1;z++) for(let y=y0;y<=y1;y++){ const base=z*N2+y*N; for(let x=x0;x<=x1;x++) S[base+x]=A[base+x]; }
+          sb=[x0,x1,y0,y1,z0,z1]; lam=0; }
+      }
+    }
+    return spaces[K]={K,NC,CM,CEN,simulate,full};
+  }
+  function fitness(res,type,color){
+    if(!res.life) return 0;
+    switch(type){
+      case 'lifetime': return res.life;
+      case 'width':    return res.maxWidth + res.life*1e-4;
+      case 'tall':     return res.life / res.maxWidth;
+      case 'wide':     return res.maxWidth / res.life;
+      case 'color':    return (res.cells ? (res.cc[color]||0)/res.cells : 0) + res.life*1e-5;
+      case 'mass':     return res.cells / res.life + res.life*1e-4;
+    }
+    return res.life;
+  }
+  const SOLO=[[0,0,0]], DEEP={damage:1,twoseed:1,oscillate:1};
+  // Fitness of a rule under design p.type. Returns {f, used}: used = every case applied in any run that entered the fitness.
+  // f = -1 means "stopped early, cannot reach cur". The three deep designs use the full lattice and cap the cutoff at 100.
+  function evaluate(sp,rule,p,cur){
+    if(!DEEP[p.type]){ const r=sp.simulate(rule,p.maxSteps,{usage:true}); return {f:fitness(r,p.type,p.color), used:r.usage}; }
+    const cut=Math.min(p.maxSteps,100), used=new Uint8Array(sp.NC), s=sp.full(rule,SOLO,cut,null,used), L=s.life;
+    if(p.type==='oscillate'){ if(s.status===0) return {f:L,used}; if(s.status===3) return {f:s.period===1?500+Math.min(s.maxExt,40):1000+10*Math.min(s.period,50)+Math.min(s.maxExt,40),used}; return {f:0,used}; }
+    if(s.status!==0) return {f:0,used};
+    if(L<cur) return {f:-1,used};
+    if(p.type==='damage'){ let robust=0, done=0;
+      for(let k=0;k<2;k++){ const step=Math.floor(L*(k+1)/3+0.5);
+        for(let which=0;which<2;which++){ const d=sp.full(rule,SOLO,cut,{step,which,k:0},used); done++;
+          if(d.dmgOk===1&&d.status===0&&Math.abs(d.life-L)<=0.25*L) robust++;
+          if(L*(1+robust+(4-done))/5<cur) return {f:-1,used}; } }
+      return {f:L*(1+robust)/5,used}; }
+    let f=L;
+    for(const dist of [3,8]){ const j=sp.full(rule,[[0,0,0],[dist,0,0]],cut,null,used); if(j.status!==0) return {f:0,used}; if(j.life<f) f=j.life; if(f<cur) return {f:-1,used}; }
+    return {f,used}; }
+  // One lineage's state and a time-sliced step. Used by background workers and by the in-page fallback alike.
+  function evoStart(m){ const sp=makeSpace(m.K), st={sp, rule:Uint8Array.from(m.rule), i:m.i||0, end:(m.i||0)+m.budget, p:m, sims:0};
+    const r=evaluate(sp,st.rule,m,0); st.cur=r.f; st.used=r.used; return st; }
+  function evoSlice(st,ms){ const p=st.p, sp=st.sp, K=sp.K, t0=Date.now(), imps=[];
+    while(st.i<st.end && Date.now()-t0<ms){
+      const idx=1+Math.floor(Math.random()*(sp.NC-1)), old=st.rule[idx];
+      let nv; do { nv = Math.random()<p.pw ? 0 : 1+Math.floor(Math.random()*(K-1)); } while(nv===old);
+      st.rule[idx]=nv; st.i++;
+      if(!st.used[idx] && st.cur>0) continue;           // case never used: same organism, neutral, accept
+      st.sims++;
+      const r=evaluate(sp,st.rule,p,st.cur), f=r.f;
+      if(f>=st.cur && f>0){ if(f>st.cur) imps.push({i:st.i,f,rule:Array.from(st.rule)}); st.cur=f; st.used=r.used; }
+      else st.rule[idx]=old;
+    }
+    return imps; }
+  // Several seeds in one lattice, every layer recorded with descent tags (colour | tag<<4; tag 1 = first seed only,
+  // 2 = the others only, 3 = both). Stops when the pattern dies, at the cutoff, or when the recording passes cellCap cells.
+  // Coordinates are relative to the seeds' midpoint (integer part of the mean seed position).
+  function multiLayers(sp,rule,seeds,cols,cut,cellCap){
+    const K=sp.K, CM=sp.CM, K2=K*K,K3=K2*K,K4=K3*K,K5=K4*K,K6=K5*K;
+    let span=0; for(const s of seeds) span=Math.max(span,Math.abs(s[0]),Math.abs(s[1]),Math.abs(s[2]));
+    const N=2*(cut+3)+2*span+1, c0=cut+3+span, N2=N*N;
+    let A=new Uint8Array(N*N2), B=new Uint8Array(N*N2), TA=new Uint8Array(N*N2), TB=new Uint8Array(N*N2);
+    let mx=0,my=0,mz=0; for(const s of seeds){ mx+=s[0]; my+=s[1]; mz+=s[2]; } mx=c0+Math.floor(mx/seeds.length); my=c0+Math.floor(my/seeds.length); mz=c0+Math.floor(mz/seeds.length);
+    let x0=N,x1=-1,y0=N,y1=-1,z0=N,z1=-1;
+    seeds.forEach((s,i)=>{ const x=c0+s[0],y=c0+s[1],z=c0+s[2], j=z*N2+y*N+x; A[j]=cols[i]; TA[j]=i?2:1; x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y);z0=Math.min(z0,z);z1=Math.max(z1,z); });
+    const layers=[]; let stored=0, maxExt=0, life=0, truncated=false;
+    const snap=()=>{ const nx=x1-x0+1, ny=y1-y0+1, nz=z1-z0+1, q=new Uint8Array(nx*ny*nz);
+      for(let z=z0;z<=z1;z++) for(let y=y0;y<=y1;y++){ const b=z*N2+y*N, o=((z-z0)*ny+(y-y0))*nx-x0; for(let x=x0;x<=x1;x++){ const v=A[b+x]; if(v) q[o+x]=v|(TA[b+x]<<4); } }
+      layers.push({b:[x0-mx,x1-mx,y0-my,y1-my,z0-mz,z1-mz],q}); stored+=q.length;
+      maxExt=Math.max(maxExt,mx-x0,x1-mx,my-y0,y1-my,mz-z0,z1-mz); };
+    snap();
+    for(let t=1;t<=cut;t++){
+      let nx0=N,nx1=-1,ny0=N,ny1=-1,nz0=N,nz1=-1;
+      for(let z=z0-1;z<=z1+1;z++) for(let y=y0-1;y<=y1+1;y++){ const base=z*N2+y*N;
+        for(let x=x0-1;x<=x1+1;x++){ const i=base+x, c=A[i], xm=A[i-1], xp=A[i+1], ym=A[i-N], yp=A[i+N], zm=A[i-N2], zp=A[i+N2];
+          const li=c*K6+xm*K5+xp*K4+ym*K3+yp*K2+zm*K+zp; if(!li){ B[i]=0; TB[i]=0; continue; }
+          const v=rule[CM[li]]; B[i]=v;
+          if(v){ TB[i]=(c?TA[i]:0)|(xm?TA[i-1]:0)|(xp?TA[i+1]:0)|(ym?TA[i-N]:0)|(yp?TA[i+N]:0)|(zm?TA[i-N2]:0)|(zp?TA[i+N2]:0);
+            if(x<nx0)nx0=x; if(x>nx1)nx1=x; if(y<ny0)ny0=y; if(y>ny1)ny1=y; if(z<nz0)nz0=z; if(z>nz1)nz1=z; }
+          else TB[i]=0; } }
+      for(let z=z0-1;z<=z1+1;z++) for(let y=y0-1;y<=y1+1;y++){ const base=z*N2+y*N; for(let x=x0-1;x<=x1+1;x++){ const i=base+x; A[i]=B[i]; B[i]=0; TA[i]=TB[i]; TB[i]=0; } }
+      if(nx1<0){ life=t; break; }
+      x0=nx0;x1=nx1;y0=ny0;y1=ny1;z0=nz0;z1=nz1;
+      if(stored+(x1-x0+1)*(y1-y0+1)*(z1-z0+1)>cellCap){ truncated=true; break; }
+      snap();
+    }
+    return {multi:true, life, truncated, layers, maxExt, maxWidth:2*maxExt+1};
+  }
+  G.makeSpace=makeSpace; G.fitness=fitness; G.multiLayers=multiLayers; G.evoStart=evoStart; G.evoSlice=evoSlice; G.evaluate=evaluate;
+}
+
+
+  core(G); return G; })();
 SCENES.rulio3d={ keepColour:true, hero:true, title:'RULIOORGANISM 3D', family:'rulio', mode:'every', every:2, warm:0, min:[80,80],
-  init(s,ctx,w,h,rng){ rulio2dInit(s,w,h,rng,rng.int(30,44)); s.a=rng.range(0,6.28); s.vox=null; s.hold=0; s.title='3D RULIOORGANISM K'+s.K; },
-  tick(s,ctx,w,h,t,rng){ const L=s.L; if(!rulioDone(L))L.stepFor(2.5);
-    if(!s.vox||(--s.hold<=0&&L.life!==s.shown.life)||(s.hold<-500&&rulioDone(L))){ if(s.hold<-500){ SCENES.rulio3d.init(s,ctx,w,h,rng); }
-      rulioRefresh(s); s.hold=rulioDone(L)?220:60; const lay=s.shown.layers, E=Math.max(1,s.shown.maxE); const vox=[];
-      const at=(t2,x,y)=>{ const l=lay[t2]; if(!l)return 0; const ax=Math.abs(x), ay=Math.abs(y); if(ax>l.ext||ay>l.ext)return 0; return l.q[ay*(l.ext+1)+ax]; };
-      for(let t2=0;t2<lay.length;t2++){ const ext=lay[t2].ext; for(let y=-ext;y<=ext;y++)for(let x=-ext;x<=ext;x++){ const v=at(t2,x,y); if(!v)continue;
-        if(at(t2,x+1,y)&&at(t2,x-1,y)&&at(t2,x,y+1)&&at(t2,x,y-1)&&at(t2-1,x,y)&&at(t2+1,x,y))continue; vox.push([x,y,t2,v]); } }
-      s.vox=vox; s.E=E; s.T=lay.length; }
-    s.a+=.012; const ca=Math.cos(s.a), sa=Math.sin(s.a), el=.5, ce=Math.cos(el), se=Math.sin(el);
-    const sc=Math.max(.6,Math.min((w-6)/(2*s.E*1.45+2),(h-12)/(s.T*ce+2*s.E*1.45*se+2))); const cx=w/2, cy=(h-8)/2-(s.T*ce*sc)/2+s.E*1.45*se*sc*.5;
-    const P=s.vox.map(([x,y,t2,v])=>{ const X=x*ca-y*sa, Z=x*sa+y*ca; return [cx+X*sc, cy+t2*ce*sc+Z*se*sc, Z, v, t2]; }).sort((a,b)=>a[2]-b[2]||b[4]-a[4]);
-    ctx.fillStyle=s.cols[0]; ctx.fillRect(0,0,w,h); const d=Math.max(1,Math.ceil(sc)+ (sc>1.4?1:0)); 
-    for(const [px,py,Z,v] of P){ ctx.fillStyle=s.cols[v]; ctx.fillRect(Math.round(px),Math.round(py),d,d); if(d>=2){ ctx.fillStyle=s.shade[v]; ctx.fillRect(Math.round(px)+d-1,Math.round(py),1,d); ctx.fillRect(Math.round(px),Math.round(py)+d-1,d,1); } }
-    ctx.fillStyle=s.cols[0]; ctx.fillRect(0,h-7,w,7); drawText(ctx,2,h-6,'LIFE '+s.shown.life+'  GEN '+s.shown.gen,s.text,w-4); } };
+  init(s,ctx,w,h,rng){ s.K=rng.pick([3,3,3,4]); s.sp=RULIO4D.makeSpace(s.K); s.maxT=rng.int(22,30); s.rule=new Uint8Array(s.sp.NC); s.life=1; s.gen=0; s.stuck=0; s.done=false;
+    s.a=rng.range(0,6.28); s.body=null; s.t=0; s.hold=0; { const C=rulioCols(rng); s.cols=C.cols; s.shade=C.shade; s.text=C.text; } s.title='3D RULIOORGANISM K'+s.K; },
+  evolve(s,rng,ms){ const t0=performance.now(); while(performance.now()-t0<ms){ for(let n=0;n<6;n++){ const r=s.rule.slice(), c=rng.int(1,s.sp.NC-1); r[c]=rng.chance(.6)?0:rng.int(1,s.K-1);
+      const res=s.sp.simulate(r,s.maxT); const f=res.status===0?res.life:0; s.gen++; if(f>=s.life){ if(f>s.life)s.stuck=0; s.rule=r; s.life=f; } else s.stuck++; } }
+    if(s.life>=s.maxT*.9||s.stuck>6000)s.done=true; },
+  grow(s){ const res=s.sp.simulate(s.rule,s.maxT,{layers:true}); s.body={layers:res.layers,life:s.life,gen:s.gen,E:Math.max(1,res.maxExt)}; s.t=0; s.vox=null; s.vt=-1; },
+  // the visible surface of the body at step t, mirrored out from the computed octant
+  voxels(s){ const L=s.body.layers[s.t]; if(!L){ s.vox=[]; return; } const e=L.e, m=e+1, q=L.q, at=(x,y,z)=>{ x=Math.abs(x); y=Math.abs(y); z=Math.abs(z); return x>e||y>e||z>e?0:q[(z*m+y)*m+x]; }, out=[];
+    for(let z=-e;z<=e;z++)for(let y=-e;y<=e;y++)for(let x=-e;x<=e;x++){ const v=at(x,y,z); if(!v)continue; if(at(x+1,y,z)&&at(x-1,y,z)&&at(x,y+1,z)&&at(x,y-1,z)&&at(x,y,z+1)&&at(x,y,z-1))continue; out.push([x,y,z,v]); }
+    s.vox=out; s.vt=s.t; },
+  tick(s,ctx,w,h,t,rng){ const S=SCENES.rulio3d; if(!s.done)S.evolve(s,rng,2.5);
+    if(!s.body){ S.grow(s); }
+    const n=s.body.layers.length;
+    if(s.t>=n-1){ if(--s.hold<=0){ if(s.done&&s.body.life===s.life){ S.init(s,ctx,w,h,rng); S.grow(s); } else if(s.life!==s.body.life||s.done){ S.grow(s); } else s.hold=1; } }
+    else if(t%2===0){ s.t++; if(s.t>=n-1)s.hold=s.done&&s.body.life===s.life?45:12; }
+    if(s.vt!==s.t)S.voxels(s);
+    s.a+=.02; const ca=Math.cos(s.a), sa=Math.sin(s.a), el=.45, ce=Math.cos(el), se=Math.sin(el), E=s.body.E;
+    const sc=Math.max(.7,Math.min((w-6)/(2*E*1.5+2),(h-12)/(2*E*1.5+2))), cx=w/2, cy=(h-8)/2;
+    const P=s.vox.map(([x,y,z,v])=>{ const X=x*ca-z*sa, Z=x*sa+z*ca, Y=y*ce+Z*se, D=Z*ce-y*se; return [cx+X*sc, cy+Y*sc, D, v]; }).sort((a,b)=>a[2]-b[2]);
+    ctx.fillStyle=s.cols[0]; ctx.fillRect(0,0,w,h); const d=Math.max(1,Math.ceil(sc)+(sc>1.4?1:0));
+    for(const [px,py,D,v] of P){ ctx.fillStyle=s.cols[v]; ctx.fillRect(Math.round(px),Math.round(py),d,d); if(d>=2){ ctx.fillStyle=s.shade[v]; ctx.fillRect(Math.round(px)+d-1,Math.round(py),1,d); ctx.fillRect(Math.round(px),Math.round(py)+d-1,d,1); } }
+    ctx.fillStyle=s.cols[0]; ctx.fillRect(0,h-7,w,7); drawText(ctx,2,h-6,'T '+s.t+'/'+(n-1)+'  LIFE '+s.body.life+'  GEN '+s.body.gen,s.text,w-4); } };
 
 // ---- Automaton I / II: life-like rules with multi-state decay ----
 function parseBS(str){ const b=new Uint8Array(9), sv=new Uint8Array(9); const [B,S]=str.split('/'); for(const c of B.slice(1))b[+c]=1; for(const c of S.slice(1))sv[+c]=1; return {b,sv}; }
@@ -1434,7 +1630,32 @@ function applyLayout(L){ if(L&&(L.portrait||L.landscape)){ COMPS.portrait=L.port
 const headerCanvas=document.createElement('canvas');
 function drawHeader(){ const hw=W-FRAME*2; headerCanvas.width=hw; headerCanvas.height=HEADER; const c=headerCanvas.getContext('2d'); const hr=makeRng(seed+99);
   c.fillStyle=colr(2); c.fillRect(0,0,hw,HEADER); c.fillStyle=colr(3); c.fillRect(0,4,hw,3); c.fillStyle=colr(6); c.fillRect(0,7,hw,7);
-  if(true){ let end=drawText(c,3,8,'¶',colr(3),hw-6); end=drawText(c,end+1,8,'FINN MULLIGAN',paper(),hw-6); end=drawText(c,end+6,8,'SMALL CLOSED SYSTEMS MOSTLY',colr(2),hw-6); glyphLine(c,end+6,8,hw-end-9,hr,paper()); } else glyphLine(c,3,8,hw-6,hr,paper()); }
+  const lim=hw-6-TBW()-4; let end=drawText(c,3,8,'¶',colr(3),lim); end=drawText(c,end+1,8,'FINN MULLIGAN',paper(),lim); end=drawText(c,end+6,8,'SMALL CLOSED SYSTEMS MOSTLY',colr(2),lim); if(lim-end-6>4)glyphLine(c,end+6,8,lim-end-6,hr,paper());
+  // a seat for the toolbar: an ink plate cut into the bands
+  const tx=hw-3-TBW()-2; c.fillStyle=colr(5); c.fillRect(tx,0,TBW()+5,HEADER); c.fillStyle=colr(2); c.fillRect(tx,0,1,HEADER); }
+// ---- toolbar, set into the header band: list view, reroll, sound, edit, controls ----
+const TB_ICONS={
+  list:  ['11111','00000','11111','00000','11111'],
+  reroll:['01111','10011','10000','10001','01110'],
+  snd:   ['00110','00101','00100','11100','11100'],
+  edit:  ['00011','00111','01110','11100','10000'],
+  ui:    ['10101','01110','11011','01110','10101'] };
+const TB=[{id:'list',tip:()=>'List view'},{id:'reroll',tip:()=>'Reroll the whole page'},{id:'snd',tip:()=>SND.on?'Sound off':'Sound on'},{id:'edit',tip:()=>ED.on?'Done editing':'Edit layout'},{id:'ui',tip:()=>'Controls'}];
+const TBB=11, TBG=2, TBW=()=>TB.length*TBB+(TB.length-1)*TBG; let TBHOVER=-1;
+function tbRects(){ const x0=W-FRAME-3-TBW(), y=FRAME+1; return TB.map((b,i)=>({...b,x:x0+i*(TBB+TBG),y,w:TBB,h:TBB})); }
+const tbAt=(x,y)=>tbRects().findIndex(r=>x>=r.x&&x<r.x+r.w&&y>=r.y&&y<r.y+r.h);
+function tbActive(id){ return (id==='snd'&&SND.on)||(id==='edit'&&ED.on)||(id==='ui'&&!document.body.classList.contains('landing')); }
+function drawToolbar(c){ tbRects().forEach((r,i)=>{ const on=tbActive(r.id), hov=i===TBHOVER;
+    c.fillStyle=ink(); c.fillRect(r.x,r.y,r.w,r.h); c.fillStyle=hov?paper():on?colr(3):colr(2); c.fillRect(r.x+1,r.y+1,r.w-2,r.h-2);
+    c.fillStyle=hov?colr(2):paper(); c.fillRect(r.x+1,r.y+1,r.w-2,1); // a lit top edge, like the gilding
+    c.fillStyle=ink(); const ic=TB_ICONS[r.id]; for(let yy=0;yy<5;yy++)for(let xx=0;xx<5;xx++)if(ic[yy][xx]==='1')c.fillRect(r.x+3+xx,r.y+3+yy,1,1); }); }
+function tbPress(i){ const id=TB[i].id;
+  if(id==='list'){ const u=SITEBASE||'./'; if(ABSOLUTE)window.open(u,'_blank','noopener'); else location.href=u; }
+  else if(id==='reroll')$('c-reroll').onclick();
+  else if(id==='snd')$('c-snd').onclick();
+  else if(id==='edit')$('c-edit').onclick();
+  else if(id==='ui')$('c-ui').onclick(); }
+function tbHover(x,y,e){ const i=tbAt(x,y); TBHOVER=i; if(i<0)return false; out.style.cursor='pointer'; tip.textContent=TB[i].tip(); tip.style.display='block'; tip.style.left=(e.clientX+12)+'px'; tip.style.top=(e.clientY+12)+'px'; return true; }
 // ---- the frame: an illuminated-manuscript border — gold rules, a running acanthus vine with alternating leaves and berries, roundels in the corners ----
 const frameCanvas=document.createElement('canvas'), frameFront=document.createElement('canvas'); let HAREPATH=null;
 function gild(c,x,y,w,h,rng,outline){ c.fillStyle=colr(2); c.fillRect(x,y,w,h); c.fillStyle=paper(); const n=Math.max(1,Math.round(w*h*.09)); for(let i=0;i<n;i++)c.fillRect(x+rng.int(0,w-1),y+rng.int(0,h-1),1,1); if(outline){ c.fillStyle=ink(); c.fillRect(x,y,w,1); c.fillRect(x,y+h-1,w,1); c.fillRect(x,y,1,h); c.fillRect(x+w-1,y,1,h); } }
@@ -1557,6 +1778,7 @@ function render(){ VIS=visibleBand();
   drawTrims();
   if(FRAME){ lctx.drawImage(frameCanvas,0,0); drawHareKnot(lctx); lctx.drawImage(frameFront,0,0); }
   if(VIS[1]>VIS[0]){ const img=lctx.getImageData(0,VIS[0],W,VIS[1]-VIS[0]); quantize(img,+$('dith').value,VIS[0]); lctx.putImageData(img,0,VIS[0]); }
+  if(VIS[0]<FRAME+HEADER)drawToolbar(lctx);
   octx.imageSmoothingEnabled=false; octx.drawImage(low,0,0,out.width,out.height); drawOverlay(); frame++;
 }
 window.addEventListener('scroll',()=>{ const t=document.getElementById('tip'); if(t)t.style.display='none'; HOVER=null; if(SCROLL&&!playing)render(); },{passive:true});
@@ -1693,7 +1915,7 @@ window.addEventListener('drop',e=>{ e.preventDefault(); for(const f of e.dataTra
 // LANDING PAGE: each tile links to its page on the site; hovering shows where it goes.
 // ============================================================
 const LINKS={ dotsboxes:['dots-and-boxes/','Dots & Boxes'], borgle:['borgle/','Borgle'], calab:['calab/','CALab'], cyclic3:['cyclic-automata/','Cyclic³'], elementary:['automata/','Cellular Automata'],
-  lifelike:['sketches/distinct-gong/','Automaton'], rulio1d:['ruliobiology/','3D RulioOrganisms'], rulio2d:['ruliobiology/','3D RulioOrganisms'], rulio3d:['ruliobiology/','3D RulioOrganisms'], flags:['flag-collager/','Flag Collager'], squigs:['squigs/','Squigs'], chess:['https://www.chess.com/member/fosforloxy','fosforloxy on chess.com'],
+  lifelike:['sketches/distinct-gong/','Automaton'], rulio1d:['ruliobiology-2d/','2D RulioOrganisms (1D rules)'], rulio2d:['ruliobiology/','3D RulioOrganisms (2D rules)'], rulio3d:['ruliobiology-4d/','4D RulioOrganisms (3D rules)'], flags:['flag-collager/','Flag Collager'], squigs:['squigs/','Squigs'], chess:['https://www.chess.com/member/fosforloxy','fosforloxy on chess.com'],
   territory:['sketches/exultant-tin/','Territory'], wavefields:['sketches/delicate-wanderer/','Wave Fields'], pixelfields:['sketches/tulip-law/','Pixel Fields'], terrainfly:['sketches/icy-lever/','Noise Terrain'],
   morphogen:['sketches/morphogenic-lattice/','Morphogenic Lattice'], gravity:['sketches/grav/','Gravity'], boids:['sketches/seemly-porkpie/','Boids'], branching:['sketches/quiet-mortarboard/','Branching Sculpture'],
   coil:['sketches/sand-coil/','Coil'], cubesphere:['sketches/speckled-mangosteen-copy/','Cube Sphere'], rectangles:['sketches/confusion-rocket/','Rectangles'], grid2:['sketches/tropical-powder/','Grid II'],
@@ -1701,7 +1923,7 @@ const LINKS={ dotsboxes:['dots-and-boxes/','Dots & Boxes'], borgle:['borgle/','B
   legend:['','Catalog'] };
 const toLow=e=>{ const r=out.getBoundingClientRect(); return [(e.clientX-r.left)/r.width*W,(e.clientY-r.top)/r.height*H]; };
 const winAt=(x,y)=>windows.find(w=>x>=w.rect.x&&x<w.rect.x+w.rect.w&&y>=w.rect.y&&y<w.rect.y+w.rect.h);
-const inHeader=(x,y)=>y>=FRAME&&y<FRAME+HEADER&&x>=FRAME&&x<W-FRAME;
+const inHeader=(x,y)=>y>=FRAME&&y<FRAME+HEADER&&x>=FRAME&&x<W-FRAME-TBW()-6;
 let HOVER=null;
 function drawOverlay(){ const k=SCALE; octx.save();
   if(!ED.on&&HOVER&&LINKS[HOVER.name]){ const r=HOVER.rect; octx.strokeStyle=toHex(PALRGB[2]); octx.lineWidth=Math.max(2,k*.75); octx.strokeRect((r.x+1)*k,(r.y+1)*k,(r.w-2)*k,(r.h-2)*k); }
@@ -1716,15 +1938,16 @@ function drawOverlay(){ const k=SCALE; octx.save();
   octx.restore(); }
 const tip=$('tip');
 out.addEventListener('mousemove',e=>{ const [x,y]=toLow(e);
+  if(tbHover(x,y,e))return;
   if(ED.on){ edMove(x,y,e); return; }
   HOVER=winAt(x,y); const L=HOVER&&LINKS[HOVER.name]; const head=inHeader(x,y);
   if(L||head){ out.style.cursor='pointer'; tip.textContent=head?'List view →':(L[1]+(L[0].startsWith('http')?' ↗':' →')); tip.style.display='block'; tip.style.left=(e.clientX+12)+'px'; tip.style.top=(e.clientY+12)+'px'; }
   else { out.style.cursor='default'; tip.style.display='none'; } });
-out.addEventListener('mouseleave',()=>{ HOVER=null; tip.style.display='none'; });
+out.addEventListener('mouseleave',()=>{ HOVER=null; TBHOVER=-1; tip.style.display='none'; });
 // relative links on the site itself (or a local copy); absolute ones anywhere else, e.g. a preview
 const SITEBASE=/github\.io$|^localhost$|^127\.|^$/.test(location.hostname)?(/\/field-test\/?/.test(location.pathname)?'../':''):'https://fosforloxy.github.io/';
 const ABSOLUTE=/^https?:/.test(SITEBASE);
-out.addEventListener('click',e=>{ if(ED.on)return; const [x,y]=toLow(e); let L=null; if(inHeader(x,y))L=['']; else { const w=winAt(x,y); L=w&&LINKS[w.name]; } if(!L)return;
+out.addEventListener('click',e=>{ { const [x,y]=toLow(e), i=tbAt(x,y); if(i>=0){ tbPress(i); return; } } if(ED.on)return; const [x,y]=toLow(e); let L=null; if(inHeader(x,y))L=['']; else { const w=winAt(x,y); L=w&&LINKS[w.name]; } if(!L)return;
   if(!L[0].startsWith('http'))L=[SITEBASE+L[0]];
   if(L[0].startsWith('http')){ const a=document.createElement('a'); a.href=L[0]; a.target='_blank'; a.rel='noopener'; document.body.appendChild(a); a.click(); a.remove(); } else location.href=L[0]; });
 
@@ -1750,7 +1973,7 @@ function edMove(x,y,e){ const D=ED.drag;
   if(D&&D.type==='tile'){ if(Math.hypot(x-D.x0,y-D.y0)>3)D.moved=true; dropAt(x,y); out.style.cursor='grabbing'; return; }
   { const w=winAt(x,y); if(w&&!ED.hoverSplit){ const L=LINKS[w.name]; const mn=SCENES[w.name].min, small=mn&&(w.rect.w<mn[0]*U/270||w.rect.h<mn[1]*U/270); tip.textContent=(SCENES[w.name].title||w.name).trim()+' · '+w.rect.w+'×'+w.rect.h+(L?' → '+L[0]:' · no link')+(small?'  ⚠ wants ≥'+Math.round(mn[0]*U/270)+'×'+Math.round(mn[1]*U/270):''); tip.style.display='block'; tip.style.left=(e.clientX+12)+'px'; tip.style.top=(e.clientY+12)+'px'; } else tip.style.display='none'; }
   ED.hoverSplit=splitAt(x,y); out.style.cursor=ED.hoverSplit?(ED.hoverSplit.node.split==='v'?'ew-resize':'ns-resize'):(winAt(x,y)?'grab':'default'); }
-out.addEventListener('mousedown',e=>{ if(!ED.on)return; e.preventDefault(); const [x,y]=toLow(e); const sp=splitAt(x,y);
+out.addEventListener('mousedown',e=>{ if(!ED.on)return; e.preventDefault(); const [x,y]=toLow(e); if(tbAt(x,y)>=0)return; const sp=splitAt(x,y);
   if(sp){ ED.drag={type:'split',node:sp.node,r:sp.r,before:snap()}; return; } const w=winAt(x,y); if(w)ED.drag={type:'tile',win:w,x0:x,y0:y,moved:false,before:snap()}; });
 window.addEventListener('mouseup',e=>{ const D=ED.drag; if(!ED.on||!D)return; ED.drag=null; ED.preview=null;
   if(D.type==='new'){ ghost.style.display='none'; const t=ED.drop, z=ED.zone; ED.drop=null; if(!t)return; const before=snap(); const d={...D.payload,ws:Math.floor(Math.random()*1e9)};
@@ -1833,7 +2056,7 @@ $('c-edit').onclick=()=>{ if(!TREE)return; edToggle(!ED.on); };
 $('cat-link').href=SITEBASE||'./'; if(ABSOLUTE)$('cat-link').target='_blank'; $('c-list').href=SITEBASE||'./';
 $('c-reroll').onclick=()=>{ $('seed').value=Math.floor(Math.random()*99999); LAYOUT_MODE='random'; ED.sel=null; build(); if(ED.on)edSave(); $('c-reroll').title='reroll again (reload for the default layout)'; };
 $('c-ui').onclick=()=>{ document.body.classList.toggle('landing'); };
-$('c-snd').onclick=()=>$('snd').onclick({target:$('snd')});
+$('c-snd').onclick=()=>{ $('snd').onclick({target:$('snd')}); };
 // random explorations from the controls leave the fixed layout
 const explore=f=>{ const before=TREE?snap():null; f(); LAYOUT_MODE='random'; build(); if(ED.on){ if(before)ED.undo.push(before); edSave(); } };
 $('regen').onclick=()=>explore(()=>{}); $('reseed').onclick=()=>explore(()=>{ $('seed').value=Math.floor(Math.random()*99999); });
