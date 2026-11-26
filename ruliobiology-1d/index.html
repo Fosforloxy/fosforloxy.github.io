@@ -208,23 +208,29 @@ function makeSpace(K,sym){ const key=K+(sym?'s':'a'); if(spaces[key]) return spa
     }
     return {life, status, period, maxWidth:maxW, cells, cc, usage, rows, left:minLo-c0, right:maxHi-c0};
   }
-    // several starting cells, each [x, 0, 0, delay, state]; rows also carry one lineage bit per cell
-  let MW=0, MA=null, MB=null, MS=null, TA=null, TB=null;
+    // several starting cells, each [x, 0, 0, delay, state, ruleIndex]. Every cell carries a species (which starting cell it
+  // descends from) and follows that cell's rule: index -1 is `rule`, otherwise opt.rules[index]. A living cell keeps its
+  // species; a newborn takes the species of its living neighbours (both sides alive and different: the cell listed first).
+  let MW=0, MA=null, MB=null, MS=null, MSS=null, TA=null, TB=null;
   function simulateMulti(rule,seeds,maxSteps,opt){ opt=opt||{};
     let span=0, lastD=0; for(const q of seeds){ span=Math.max(span,Math.abs(q[0])); lastD=Math.max(lastD,q[3]||0); }
-    const need=2*(maxSteps+span)+9; if(MW!==need){ MW=need; MA=new Uint8Array(MW); MB=new Uint8Array(MW); MS=new Uint8Array(MW); TA=new Uint8Array(MW); TB=new Uint8Array(MW); } else { MA.fill(0); MB.fill(0); MS.fill(0); TA.fill(0); TB.fill(0); }
+    const need=2*(maxSteps+span)+9; if(MW!==need){ MW=need; MA=new Uint8Array(MW); MB=new Uint8Array(MW); MS=new Uint8Array(MW); MSS=new Uint8Array(MW); TA=new Uint8Array(MW); TB=new Uint8Array(MW); } else { MA.fill(0); MB.fill(0); MS.fill(0); MSS.fill(0); TA.fill(0); TB.fill(0); }
+    const RS=seeds.map(q=>q[5]>=0&&opt.rules&&opt.rules[q[5]]?opt.rules[q[5]]:rule), MAIN=RS.map(r=>r===rule);
     const usage=opt.usage?new Uint8Array(NC):null, rows=opt.rows?[]:null, cc=new Float64Array(K), tags=!!opt.tags;
-    const grows=(E)=>{ const g=new Uint8Array(K); for(let a=1;a<K;a++){ let x=a, ok=1; for(let j=0;j<=K;j++){ x=rule[E[x]]; if(!x){ ok=0; break; } } g[a]=ok; } return g; }, immR=grows(RIGHT), immL=sym?immR:grows(LEFT);
+    const grows=(R,E)=>{ const g=new Uint8Array(K); for(let a=1;a<K;a++){ let x=a, ok=1; for(let j=0;j<=K;j++){ x=R[E[x]]; if(!x){ ok=0; break; } } g[a]=ok; } return g; };
+    const immR=RS.map(R=>grows(R,RIGHT)), immL=RS.map(R=>grows(R,LEFT));
     const c0=MW>>1; let a=MA, b=MB, ta=TA, tb=TB, lo=MW, hi=-1, cells=0, maxW=1, minLo=MW, maxHi=-1, life=0, status=1, period=0;
-    const put=t=>seeds.forEach((q,i)=>{ if((q[3]||0)!==t) return; const x=c0+q[0]; a[x]=q[4]||1; ta[x]=1<<i; cells++; cc[q[4]||1]++; if(x<lo)lo=x; if(x>hi)hi=x; });
+    const put=t=>seeds.forEach((q,i)=>{ if((q[3]||0)!==t) return; const x=c0+q[0]; a[x]=q[4]||1; ta[x]=i+1; cells++; cc[q[4]||1]++; if(x<lo)lo=x; if(x>hi)hi=x; });
     put(0); if(hi<0){ lo=hi=c0+seeds[0][0]; }
     const snap=()=>{ if(lo<minLo)minLo=lo; if(hi>maxHi)maxHi=hi; if(rows) rows.push({lo:lo-c0,d:a.slice(lo,hi+1),tg:tags?ta.slice(lo,hi+1):null}); };
     snap(); let blo=lo, bhi=hi, sLo=-1, sHi=-1, power=1, lam=0;
     for(let t=1;t<=maxSteps;t++){
-      if(t>lastD&&(immL[a[lo]]||immR[a[hi]])){ status=2; break; }
-      b.fill(0,blo,bhi+1); if(tags) tb.fill(0,blo,bhi+1); let nlo=MW, nhi=-1;
-      for(let x=lo-1;x<=hi+1;x++){ const li=(a[x-1]*K+a[x])*K+a[x+1]; if(!li){ b[x]=0; continue; } const ci=CM[li], v=rule[ci]; b[x]=v; if(usage) usage[ci]=1;
-        if(v){ cells++; cc[v]++; if(x<nlo) nlo=x; if(x>nhi) nhi=x; if(tags) tb[x]=(a[x-1]?ta[x-1]:0)|(a[x]?ta[x]:0)|(a[x+1]?ta[x+1]:0); } }
+      if(t>lastD&&((a[lo]&&immL[ta[lo]-1][a[lo]])||(a[hi]&&immR[ta[hi]-1][a[hi]]))){ status=2; break; }
+      b.fill(0,blo,bhi+1); tb.fill(0,blo,bhi+1); let nlo=MW, nhi=-1;
+      for(let x=lo-1;x<=hi+1;x++){ const li=(a[x-1]*K+a[x])*K+a[x+1]; if(!li){ b[x]=0; continue; }
+        let sp; if(a[x]) sp=ta[x]; else { const l=a[x-1]?ta[x-1]:0, r=a[x+1]?ta[x+1]:0; sp=l&&r?Math.min(l,r):(l||r); }
+        const ci=CM[li], v=RS[sp-1][ci]; b[x]=v; if(usage&&MAIN[sp-1]) usage[ci]=1;
+        if(v){ tb[x]=sp; cells++; cc[v]++; if(x<nlo) nlo=x; if(x>nhi) nhi=x; } }
       let T=a; a=b; b=T; T=ta; ta=tb; tb=T; blo=lo-1; bhi=hi+1;
       if(nhi<0&&t>lastD){ life=t; status=0; if(rows) rows.push({lo:0,d:new Uint8Array(0),tg:null,dead:true}); break; }
       if(nhi<0){ nlo=nhi=lo; }
@@ -232,8 +238,8 @@ function makeSpace(K,sym){ const key=K+(sym?'s':'a'); if(spaces[key]) return spa
       if(hi-lo+1>maxW) maxW=hi-lo+1;
       if(lo<2||hi>MW-3){ status=1; break; }
       snap();
-      if(t>lastD){ if(lo===sLo&&hi===sHi){ let same=true; for(let x=lo;x<=hi;x++) if(a[x]!==MS[x]){ same=false; break; } if(same){ status=3; period=lam+1; break; } }
-        if(++lam>=power||sLo<0){ if(sLo>=0) MS.fill(0,sLo,sHi+1); for(let x=lo;x<=hi;x++) MS[x]=a[x]; sLo=lo; sHi=hi; if(lam>=power) power*=2; lam=0; } }
+      if(t>lastD){ if(lo===sLo&&hi===sHi){ let same=true; for(let x=lo;x<=hi;x++) if(a[x]!==MS[x]||ta[x]!==MSS[x]){ same=false; break; } if(same){ status=3; period=lam+1; break; } }
+        if(++lam>=power||sLo<0){ if(sLo>=0){ MS.fill(0,sLo,sHi+1); MSS.fill(0,sLo,sHi+1); } for(let x=lo;x<=hi;x++){ MS[x]=a[x]; MSS[x]=ta[x]; } sLo=lo; sHi=hi; if(lam>=power) power*=2; lam=0; } }
     }
     return {life, status, period, maxWidth:maxW, cells, cc, usage, rows, left:minLo-c0, right:maxHi-c0, multi:true};
   }
@@ -260,8 +266,11 @@ let PAL=DEFAULT_PAL.slice();
 let lineages=[], selected=0, running=false, shown=null, step=0, params=null;
 const RGB=()=>PAL.map(h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
 const dispCut=()=>+$('maxSteps').value;
-let SEEDS=null; const evoSeeds=()=>params&&params.seeds;
-function simEvo(rule,cut,opt){ const sd=evoSeeds(); return sd?SP.simulateMulti(rule,sd,cut,opt):SP.simulate(rule,cut,opt); }
+let SEEDS=null, seedsDirty=false; const evoSeeds=()=>params&&params.seeds;
+function simEvo(rule,cut,opt){ const sd=evoSeeds(); return sd?SP.simulateMulti(rule,sd,cut,Object.assign({rules:params.rules},opt||{})):SP.simulate(rule,cut,opt); }
+// rules a starting cell can follow: the organism shown, or any lineage's latest rule
+const ruleChoices=()=>[{id:'shown',label:'This organism',short:'this'}].concat(lineages.map((L,k)=>({id:'L'+(k+1),label:'Lineage '+(k+1),short:'L'+(k+1)})));
+const resolveRule=id=>{ const m=/^L(\d+)$/.exec(id); return m&&lineages[+m[1]-1]?lineages[+m[1]-1].rule:null; };
 
 function buildPalUI(){ const el=$('pal'); el.textContent='';
   for(let c=1;c<K;c++){ const inp=document.createElement('input'); inp.type='color'; inp.value=PAL[c]; inp.setAttribute('aria-label','Color '+c);
@@ -280,7 +289,7 @@ function paintImage(){ const res=shown.res, rows=res.rows, w=res.right-res.left+
   const byLin=SEEDS&&SEEDS.lineage()&&res.multi, LR=byLin?linColors().map(h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]):null;
   rows.forEach((r,y)=>{ for(let k=0;k<r.d.length;k++){ const v=r.d[k]; if(!v) continue; const x=r.lo+k-res.left, o=(y*img.width+x)*4; const c=byLin&&r.tg?LR[r.tg[k]]||LR[0]:rgb[v]; d[o]=c[0]; d[o+1]=c[1]; d[o+2]=c[2]; } });
   ctx.putImageData(im,0,0); }
-function linColors(){ const L=SEEDS.list(), out=['#4a4a4a']; for(let b=1;b<32;b++){ const one=(b&(b-1))===0; out.push(one&&L[Math.log2(b)]?SEEDS.SEEDCOL[L[Math.log2(b)].i]:'#4a4a4a'); } return out; }
+function linColors(){ const L=SEEDS.list(), out=['#4a4a4a']; for(let k=0;k<5;k++) out.push(L[k]?SEEDS.SEEDCOL[L[k].i]:'#4a4a4a'); return out; }
 const view={s:1,x:0,y:0,fit:true};
 const st=$('st'), sctx=st.getContext('2d');
 function sizeStage(){ const r=$('stage').getBoundingClientRect(), dpr=Math.min(2,window.devicePixelRatio||1); st.width=Math.round(r.width*dpr); st.height=Math.round(r.height*dpr); st._dpr=dpr; }
@@ -301,7 +310,7 @@ function setStep(s){ step=Math.max(0,Math.min(rowsTotal()-1,s)); draw(); }
 
 /* ---------- show an organism ---------- */
 function show(rule,label){ label=label.replace(/ · \d seeds?,.*$/,''); const multi=SEEDS&&SEEDS.active();
-  const res=multi?SP.simulateMulti(rule,SEEDS.packed(),dispCut(),{rows:true,usage:true,tags:true}):SP.simulate(rule,dispCut(),{rows:true,usage:true}); shown={rule:Uint8Array.from(rule),res,label};
+  const pk=multi?(SEEDS.evolve()&&params&&params.seeds&&!seedsDirty?{seeds:params.seeds,rules:params.rules}:SEEDS.pack(resolveRule)):null; const res=multi?SP.simulateMulti(rule,pk.seeds,dispCut(),{rows:true,usage:true,tags:true,rules:pk.rules}):SP.simulate(rule,dispCut(),{rows:true,usage:true}); shown={rule:Uint8Array.from(rule),res,label};
   paintImage(); $('t').max=Math.max(1,res.rows.length-1); if(view.fit||!view.s) fitView();
   const used=res.usage.reduce((a,b)=>a+b,0), fate=res.status===0?'dies at step '+res.life:res.status===3?'repeats with period '+res.period:res.status===2?'grows forever':'still alive at the cutoff';
   if(multi){ const alone=SP.simulate(rule,dispCut()); $('title2d').textContent=label+' · '+SEEDS.describe()+' — together it '+fate.replace(/^still/,'is still')+' · alone it '+(alone.status===0?'dies at step '+alone.life:'never dies'); }
@@ -349,7 +358,7 @@ function drawChart(){ const cv=$('chart'), ctx=cv.getContext('2d'), W=cv.width, 
   lineages.forEach((L,k)=>{ if(k!==selected) line(L,'#c9c9c9',2); }); if(lineages[selected]) line(lineages[selected],'#1e1e1e',3); }
 
 /* ---------- evolution: runs in the page, a slice of each frame ---------- */
-function readParams(){ return {K, sym:SYM, type:$('ftype').value, color:+$('fcolor').value||1, maxSteps:+$('maxSteps').value, pw:+$('pw').value, budget:Math.max(100,+$('budget').value|0), seeds:SEEDS&&SEEDS.evolve()?SEEDS.packed():null}; }
+function readParams(){ return {K, sym:SYM, type:$('ftype').value, color:+$('fcolor').value||1, maxSteps:+$('maxSteps').value, pw:+$('pw').value, budget:Math.max(100,+$('budget').value|0), ...(SEEDS&&SEEDS.evolve()?SEEDS.pack(resolveRule):{seeds:null,rules:null})}; }
 function mutate(rule,p){ const r=Uint8Array.from(rule), i=1+Math.floor(Math.random()*(SP.NC-1)), cur=r[i];
   if(cur&&Math.random()<p.pw){ r[i]=0; return r; }
   const opts=[]; for(let v=0;v<K;v++) if(v!==cur&&!(cur&&v===0&&p.pw>0)) opts.push(v); r[i]=opts.length?opts[Math.floor(Math.random()*opts.length)]:0; return r; }
@@ -365,10 +374,10 @@ function pump(){ if(!running) return; const t0=performance.now(); let busy=false
   $('pbar').style.width=(100*done/Math.max(1,goal)).toFixed(1)+'%'; $('progress').textContent=done.toLocaleString()+' / '+goal.toLocaleString();
   const now=performance.now(); if(now-lastUI>350||!busy){ lastUI=now; drawChart(); renderPop(); if(dirtySel){ dirtySel=false; renderLin(); const L=lineages[selected]; if(!growing) show(L.rule,'Lineage '+(selected+1)+', latest'); } }
   if(busy) requestAnimationFrame(pump); else finish(); }
-function finish(){ running=false; $('go').disabled=false; $('cont').disabled=!lineages.length; $('stop').disabled=true;
+function finish(){ running=false; if(SEEDS) SEEDS.refreshRules(); $('go').disabled=false; $('cont').disabled=!lineages.length; $('stop').disabled=true;
   // show the fittest lineage
   let best=0; lineages.forEach((L,k)=>{ if(L.cur>lineages[best].cur) best=k; }); selected=best; drawChart(); renderPop(); renderLin(); const L=lineages[best]; if(L) show(L.rule,'Lineage '+(best+1)+', latest'); }
-function start(fresh){ $('err').style.display='none'; params=readParams(); if(fresh||!lineages.length){ setSpace(); params=readParams(); const n=Math.max(1,Math.min(12,+$('nLin').value|0)); lineages=[]; for(let k=0;k<n;k++) lineages.push(newLineage(params)); selected=0; }
+function start(fresh){ $('err').style.display='none'; seedsDirty=false; params=readParams(); if(fresh||!lineages.length){ setSpace(); params=readParams(); const n=Math.max(1,Math.min(12,+$('nLin').value|0)); lineages=[]; for(let k=0;k<n;k++) lineages.push(newLineage(params)); selected=0; }
   else lineages.forEach(L=>L.goal=L.i+params.budget);
   running=true; $('go').disabled=true; $('cont').disabled=true; $('stop').disabled=false; requestAnimationFrame(pump); }
 $('go').onclick=()=>start(true); $('cont').onclick=()=>start(false); $('stop').onclick=()=>{ running=false; finish(); };
@@ -409,13 +418,14 @@ window.addEventListener('resize',()=>{ sizeStage(); if(view.fit) fitView(); draw
 
 /* ---------- starting cells: up to 5, each with a position, a delay and a starting state ----------
    Shared by the 1D, 2D and 3D RulioOrganisms pages. SeedsUI(dim, onChange) builds the panel in #seedsUI. */
-function SeedsUI(DIM, onChange){
+function SeedsUI(DIM, onChange, ruleChoices){
+  ruleChoices=ruleChoices||(()=>[{id:'shown',label:'This organism'}]);
   const $s=id=>document.getElementById(id), root=$s('seedsUI'), AX=['x','y','z'].slice(0,DIM);
   const SEEDCOL=['#2a78d6','#eb6834','#2f9e5a','#9b4fd1','#d4a514'];
   const LAYOUTS={1:[['line','In a line'],['both','Both sides of the first'],['scatter','Scattered']],
                  2:[['line','In a line'],['cross','Cross (keeps symmetry)'],['ring','Ring around the first'],['diag','Diagonal'],['scatter','Scattered']],
                  3:[['line','In a line'],['star','Star (keeps symmetry)'],['ring','Ring around the first'],['diag','Diagonal'],['scatter','Scattered']]}[DIM];
-  let K=5, S=[{p:[0,0,0],d:0,c:1}], rnd=1;
+  let K=5, S=[{p:[0,0,0],d:0,c:1,r:'shown'}], rnd=1;
   root.innerHTML=`
   <div class="row">
     <div><label class="f" for="sN">Starting cells</label><select id="sN">${[1,2,3,4,5].map(n=>`<option>${n}</option>`).join('')}</select></div>
@@ -427,17 +437,18 @@ function SeedsUI(DIM, onChange){
   </div>
   <div class="row">
     <div><label class="f" for="sCol">Starting states</label><select id="sCol"><option value="same">All the seed color</option><option value="alt">Alternate two colors</option><option value="cycle">Cycle through colors</option></select></div>
-    <div></div>
+    <div><label class="f" for="sRul">Rules</label><select id="sRul"><option value="same">Same rule for every cell</option><option value="lin">A different lineage each</option></select></div>
   </div>
   <table class="seedtbl" id="sTbl"></table>
   <div class="check"><input type="checkbox" id="sEvo"><label for="sEvo">Evolve with these starting cells</label></div>
-  <div class="check"><input type="checkbox" id="sLin"><label for="sLin">Color by starting cell (gray where lineages meet)</label></div>
+  <div class="check"><input type="checkbox" id="sLin"><label for="sLin">Color by starting cell (shows each rule's territory)</label></div>
   <div class="note" id="sNote"></div>`;
   const css=document.createElement('style'); css.textContent=`
     .seedtbl{width:100%;border-collapse:collapse;margin-top:8px;font-size:11.5px;font-variant-numeric:tabular-nums}
     .seedtbl th{font-weight:500;color:var(--muted);text-align:left;padding:0 2px 3px;font-size:10.5px}
     .seedtbl td{padding:1px 2px} .seedtbl td:first-child{white-space:nowrap;width:28px}
     .seedtbl input,.seedtbl select{width:100%;padding:2px 3px;font-size:11.5px;border:1px solid var(--line);border-radius:3px;background:#fff;color:var(--ink)}
+    .seedtbl select.rule{min-width:0}
     .seedtbl .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:3px;vertical-align:-1px}`;
   document.head.appendChild(css);
 
@@ -456,39 +467,49 @@ function SeedsUI(DIM, onChange){
     return P; }
   function rebuild(what){ const N=n(), P=positions(), del=Math.max(0,+$s('sDel').value|0), cs=$s('sCol').value;
     const old=S; S=[]; for(let i=0;i<N;i++){ const o=old[i]||{p:[0,0,0],d:0,c:1};
-      S.push({p:(what==='all'||what==='pos')?P[i]:o.p.slice(), d:(what==='all'||what==='del')?i*del:o.d, c:(what==='all'||what==='col')?(cs==='same'?1:cs==='alt'?(i%2?Math.min(2,K-1):1):1+(i%(K-1))):Math.min(o.c,K-1)}); }
+      const rs=$s('sRul').value, ids=ruleChoices().map(c=>c.id), lin=ids.filter(id=>/^L\d/.test(id));
+      S.push({p:(what==='all'||what==='pos')?P[i]:o.p.slice(), d:(what==='all'||what==='del')?i*del:o.d, c:(what==='all'||what==='col')?(cs==='same'?1:cs==='alt'?(i%2?Math.min(2,K-1):1):1+(i%(K-1))):Math.min(o.c,K-1),
+        r:(what==='all'||what==='rul')?(rs==='same'?'shown':(lin[i]||ids[i]||'shown')):(o.r||'shown')}); }
     table(); changed(); }
-  function table(){ const t=$s('sTbl'); let h=`<tr><th>#</th>${AX.map(a=>`<th>${a}</th>`).join('')}<th>delay</th><th>state</th></tr>`;
+  function table(){ const t=$s('sTbl'), ch=ruleChoices(); let h=`<tr><th>#</th>${AX.map(a=>`<th>${a}</th>`).join('')}<th>delay</th><th>state</th><th>rule</th></tr>`;
     S.forEach((s,i)=>{ h+=`<tr><td><span class="dot" style="background:${SEEDCOL[i]}"></span>${i+1}</td>`+
       AX.map((a,k)=>`<td><input type="number" data-i="${i}" data-k="${k}" value="${s.p[k]}" min="-60" max="60" aria-label="cell ${i+1} ${a}"></td>`).join('')+
       `<td><input type="number" data-i="${i}" data-k="d" value="${s.d}" min="0" max="200" aria-label="cell ${i+1} delay"></td>`+
-      `<td><select data-i="${i}" data-k="c" aria-label="cell ${i+1} starting state">${Array.from({length:K-1},(_,c)=>`<option value="${c+1}"${s.c===c+1?' selected':''}>${c+1}</option>`).join('')}</select></td></tr>`; });
+      `<td><select data-i="${i}" data-k="c" aria-label="cell ${i+1} starting state">${Array.from({length:K-1},(_,c)=>`<option value="${c+1}"${s.c===c+1?' selected':''}>${c+1}</option>`).join('')}</select></td>`+
+      `<td><select class="rule" data-i="${i}" data-k="r" aria-label="cell ${i+1} rule">${ch.map(c=>`<option value="${c.id}"${s.r===c.id?' selected':''}>${c.short||c.label}</option>`).join('')}</select></td></tr>`; });
     t.innerHTML=h;
     t.querySelectorAll('input,select').forEach(el=>el.addEventListener('change',()=>{ const i=+el.dataset.i, k=el.dataset.k, v=Math.round(+el.value)||0;
-      if(k==='d') S[i].d=Math.max(0,v); else if(k==='c') S[i].c=v; else S[i].p[+k]=Math.max(-60,Math.min(60,v)); changed(); })); }
+      if(k==='r') S[i].r=el.value; else if(k==='d') S[i].d=Math.max(0,v); else if(k==='c') S[i].c=v; else S[i].p[+k]=Math.max(-60,Math.min(60,v)); changed(); })); }
   // delays are measured from the first cell to appear; overlapping cells keep the first one listed
   function list(){ const m=Math.min(...S.map(s=>s.d)), seen=new Set(), out=[];
-    S.forEach((s,i)=>{ const key=s.p.join(','); if(seen.has(key))return; seen.add(key); out.push({p:s.p.slice(),d:s.d-m,c:s.c,i}); }); return out; }
-  const active=()=>{ const L=list(); return L.length>1||L.some(s=>s.c!==1||s.p.some(v=>v)); };
+    S.forEach((s,i)=>{ const key=s.p.join(','); if(seen.has(key))return; seen.add(key); out.push({p:s.p.slice(),d:s.d-m,c:s.c,r:s.r||'shown',i}); }); return out; }
+  const active=()=>{ const L=list(); return L.length>1||L.some(s=>s.c!==1||s.p.some(v=>v)||s.r!=='shown'); };
   function describe(){ const L=list(), N=L.length; if(!active())return 'one seed';
     const dl=L.some(s=>s.d)?', staggered up to '+Math.max(...L.map(s=>s.d))+' steps':'';
-    return N+(N===1?' seed':' seeds')+(N>1?', '+$s('sLay').selectedOptions[0].textContent.toLowerCase().replace(/ \(.*\)/,'')+', '+gap()+' apart':'')+dl; }
+    const nr=new Set(L.map(s=>s.r)).size, rl=nr>1?', '+nr+' different rules':'';
+    return N+(N===1?' seed':' seeds')+(N>1?', '+$s('sLay').selectedOptions[0].textContent.toLowerCase().replace(/ \(.*\)/,'')+', '+gap()+' apart':'')+dl+rl; }
   function changed(){ const evo=$s('sEvo');
     $s('sNote').textContent=active()
-      ? 'Several starting cells (or a moved one) break the shortcut that grows only one symmetric quarter, so the whole space is simulated. Overlapping cells count once.'+(evo.checked?' Evolution scores each mutant on this arrangement, which is slower.':' Organisms are still evolved from one seed unless “Evolve with these starting cells” is on.')
+      ? 'Each starting cell grows by its own rule. A living cell keeps its rule; a newborn cell takes the rule most common among its living neighbours (ties go to the cell listed first). The whole space is simulated. Overlapping cells count once.'+(evo.checked?' Evolution scores each mutant on this arrangement, which is slower.':' Organisms are still evolved from one seed unless “Evolve with these starting cells” is on.')
       : 'One seed at the center: the classic setup.';
+    if(evo.checked&&active()) $s('sNote').textContent+=' While evolving, cells set to “This organism” carry the mutating rule; the others keep theirs fixed.';
     onChange&&onChange(); }
   $s('sN').onchange=()=>rebuild('all'); $s('sLay').onchange=()=>{ rnd=Date.now()%2147483647||1; rebuild('pos'); }; $s('sGap').onchange=()=>rebuild('pos');
-  $s('sDel').onchange=()=>rebuild('del'); $s('sCol').onchange=()=>rebuild('col'); $s('sEvo').onchange=changed; $s('sLin').onchange=()=>onChange&&onChange('lineage');
+  $s('sDel').onchange=()=>rebuild('del'); $s('sCol').onchange=()=>rebuild('col'); $s('sRul').onchange=()=>rebuild('rul'); $s('sEvo').onchange=changed; $s('sLin').onchange=()=>onChange&&onChange('lineage');
   rebuild('all');
   return { list, active, describe, SEEDCOL, lineage:()=>$s('sLin').checked, evolve:()=>$s('sEvo').checked&&active(),
-    setK(k){ K=k; S.forEach(s=>{ if(s.c>K-1)s.c=K-1; }); table(); },
+    setK(k){ K=k; S.forEach(s=>{ if(s.c>K-1)s.c=K-1; }); const ids=ruleChoices().map(c=>c.id); S.forEach(s=>{ if(!ids.includes(s.r))s.r='shown'; }); table(); },
+    // call when the list of available rules changes (a new population, a different colour count)
+    refreshRules(){ const ids=ruleChoices().map(c=>c.id); S.forEach(s=>{ if(!ids.includes(s.r))s.r='shown'; }); table(); },
     // [x,y,z,delay,state] per cell, for the simulators
-    packed:()=>list().map(s=>[s.p[0],s.p[1],s.p[2],s.d,s.c]) };
+    // [x,y,z,delay,state,ruleIndex] per cell plus the rules: index -1 is the organism being shown or evolved
+    pack(resolve){ const rules=[], idx=new Map(); const seeds=list().map(s=>{ let ri=-1; if(s.r!=='shown'){ const r=resolve(s.r); if(r){ if(!idx.has(s.r)){ idx.set(s.r,rules.length); rules.push(Array.from(r)); } ri=idx.get(s.r); } } return [s.p[0],s.p[1],s.p[2],s.d,s.c,ri]; });
+      return {seeds,rules}; },
+    packed:()=>list().map(s=>[s.p[0],s.p[1],s.p[2],s.d,s.c,-1]) };
 }
 
 /* ---------- start: evolve a fresh population straight away ---------- */
-SEEDS=SeedsUI(1,what=>{ if(!shown) return; if(what==='lineage'){ paintImage(); draw(); } else { stopGrow(); show(shown.rule,shown.label); } });
+SEEDS=SeedsUI(1,what=>{ if(!shown) return; if(what==='lineage'){ paintImage(); draw(); } else { seedsDirty=true; stopGrow(); show(shown.rule,shown.label); } }, ruleChoices);
 sizeStage(); setSpace(); $('ftype').onchange(); start(true);
 </script>
 <script>
