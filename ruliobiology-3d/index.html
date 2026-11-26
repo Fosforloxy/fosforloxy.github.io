@@ -219,7 +219,7 @@ function core(G){
     let FN=0,FA=null,FB=null,FS=null,fd=null;
     let FT=null, FTB=null;
     function full(rule,seeds,cut,dmg,usage,rules){
-      const RS=seeds.map(s=>s[5]>=0&&rules&&rules[s[5]]?rules[s[5]]:rule), MIX=RS.some(r=>r!==rule), cnt=new Uint8Array(6);
+      const RS=seeds.map(s=>s[5]>=0&&rules&&rules[s[5]]?rules[s[5]]:rule), MIX=seeds.length>1, cnt=new Uint8Array(6), last=new Int32Array(seeds.length).fill(-1);
       let span=0; for(const s of seeds) span=Math.max(span,Math.abs(s[0]),Math.abs(s[1]),Math.abs(s[2]));
       const N=2*(cut+3)+2*span+1, c0=cut+3+span, N2=N*N;
       if(FN!==N){ FN=N; FA=new Uint8Array(N*N2); FB=new Uint8Array(N*N2); FS=new Uint8Array(N*N2); FT=new Uint8Array(N*N2); FTB=new Uint8Array(N*N2); fd=null; }
@@ -227,13 +227,13 @@ function core(G){
       const A=FA,B=FB,S=FS,T=FT,TB=FTB, imm=new Uint8Array(K);
       for(let a=1;a<K;a++){ let x=a, ok=1; for(let j=0;j<=K;j++){ x=rule[EDGE[x]]; if(!x){ ok=0; break; } } imm[a]=ok; }
       let x0=N,x1=-1,y0=N,y1=-1,z0=N,z1=-1;
-      let lastD=0; for(const [si,s] of seeds.entries()){ const d=s[3]||0; if(d>lastD) lastD=d; if(d) continue; const x=c0+s[0],y=c0+s[1],z=c0+s[2]; A[z*N2+y*N+x]=s[4]||1; T[z*N2+y*N+x]=si+1; if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; if(z<z0)z0=z; if(z>z1)z1=z; }
+      let lastD=0; for(const [si,s] of seeds.entries()){ const d=s[3]||0; if(d>lastD) lastD=d; if(d) continue; const x=c0+s[0],y=c0+s[1],z=c0+s[2]; A[z*N2+y*N+x]=s[4]||1; T[z*N2+y*N+x]=si+1; last[si]=0; if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; if(z<z0)z0=z; if(z>z1)z1=z; }
       // starting cells with a delay are set at their step (overwriting whatever is there)
-      const inject=(t)=>{ for(const [si,s] of seeds.entries()){ if((s[3]||0)!==t) continue; const x=c0+s[0],y=c0+s[1],z=c0+s[2]; A[z*N2+y*N+x]=s[4]||1; T[z*N2+y*N+x]=si+1; if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; if(z<z0)z0=z; if(z>z1)z1=z; } };
+      const inject=(t)=>{ for(const [si,s] of seeds.entries()){ if((s[3]||0)!==t) continue; const x=c0+s[0],y=c0+s[1],z=c0+s[2]; A[z*N2+y*N+x]=s[4]||1; T[z*N2+y*N+x]=si+1; last[si]=t; if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; if(z<z0)z0=z; if(z>z1)z1=z; } };
       const cx=c0+seeds[0][0], cy=c0+seeds[0][1], cz=c0+seeds[0][2];
       fd=[x0-1,x1+1,y0-1,y1+1,z0-1,z1+1]; const grow=()=>{ if(x0-1<fd[0])fd[0]=x0-1; if(x1+1>fd[1])fd[1]=x1+1; if(y0-1<fd[2])fd[2]=y0-1; if(y1+1>fd[3])fd[3]=y1+1; if(z0-1<fd[4])fd[4]=z0-1; if(z1+1>fd[5])fd[5]=z1+1; };
       let sb=null, power=1, lam=0, maxExt=0, dmgOk=0, t=0;
-      const out=(life,status,period)=>({life,status,period,maxExt,dmgOk});
+      const out=(life,status,period)=>({life,status,period,maxExt,dmgOk,spLife:MIX?seeds.map((q,i)=>last[i]<0?0:last[i]-(q[3]||0)+1):null});
       for(;;){
         if(dmg && t===dmg.step){ let best=-1, bi=-1, cnt=0;
           for(let z=z0;z<=z1;z++) for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){ const i=z*N2+y*N+x; if(!A[i]) continue;
@@ -252,7 +252,7 @@ function core(G){
             if(!MIX){ usage[ci]=1; v=rule[ci]; }
             else { let s2; if(A[i]) s2=T[i]; else { cnt.fill(0); if(A[i-1])cnt[T[i-1]]++; if(A[i+1])cnt[T[i+1]]++; if(A[i-N])cnt[T[i-N]]++; if(A[i+N])cnt[T[i+N]]++; if(A[i-N2])cnt[T[i-N2]]++; if(A[i+N2])cnt[T[i+N2]]++;
                 s2=1; for(let k=2;k<6;k++) if(cnt[k]>cnt[s2]) s2=k; if(!cnt[s2]) for(let k=1;k<6;k++) if(cnt[k]){ s2=k; break; } }
-              const R=RS[s2-1]; if(R===rule) usage[ci]=1; v=R[ci]; TB[i]=v?s2:0; }
+              const R=RS[s2-1]; if(R===rule) usage[ci]=1; v=R[ci]; TB[i]=v?s2:0; if(v) last[s2-1]=t+1; }
             B[i]=v;
             if(v){ if(x<nx0)nx0=x; if(x>nx1)nx1=x; if(y<ny0)ny0=y; if(y>ny1)ny1=y; if(z<nz0)nz0=z; if(z>nz1)nz1=z; } } }
         for(let z=z0-1;z<=z1+1;z++) for(let y=y0-1;y<=y1+1;y++){ const base=z*N2+y*N; for(let x=x0-1;x<=x1+1;x++){ A[base+x]=B[base+x]; B[base+x]=0; if(MIX){ T[base+x]=TB[base+x]; TB[base+x]=0; } } }
@@ -292,7 +292,10 @@ function core(G){
     // evolving with several starting cells: score the whole arrangement on the full lattice
     if(p.seeds){ const cut=Math.min(p.maxSteps,100), used=new Uint8Array(sp.NC), r=sp.full(rule,p.seeds,cut,null,used,p.rules);
       if(r.status!==0) return {f:0,used}; const W=2*r.maxExt+1, L=r.life;
-      const f=p.type==='width'?W+L*1e-4:p.type==='tall'?L/W:p.type==='wide'?W/L:L; return {f,used}; }
+      let f=p.type==='width'?W+L*1e-4:p.type==='tall'?L/W:p.type==='wide'?W/L:L;
+      // every lineage has to survive: the shortest-lived one sets the score
+      if(r.spLife&&r.spLife.length>1){ const m=Math.min(...r.spLife); f=p.type==='lifetime'?m:f*m/L; }
+      return {f,used}; }
     if(!DEEP[p.type]){ const r=sp.simulate(rule,p.maxSteps,{usage:true}); return {f:fitness(r,p.type,p.color), used:r.usage}; }
     const cut=Math.min(p.maxSteps,100), used=new Uint8Array(sp.NC), s=sp.full(rule,SOLO,cut,null,used), L=s.life;
     if(p.type==='oscillate'){ if(s.status===0) return {f:L,used}; if(s.status===3) return {f:s.period===1?500+Math.min(s.maxExt,40):1000+10*Math.min(s.period,50)+Math.min(s.maxExt,40),used}; return {f:0,used}; }
@@ -327,14 +330,14 @@ function core(G){
   // Coordinates are relative to the seeds' midpoint (integer part of the mean seed position).
   // Each starting cell's descendants follow that cell's rule (R[i], or `rule`). A living cell keeps its species; a newborn
   // takes the species most common among its living face neighbours (ties: the cell listed first).
-  function multiLayers(sp,rule,seeds,cols,cut,cellCap,delays,R){ delays=delays||seeds.map(()=>0); const lastD=Math.max(...delays); R=seeds.map((_,i)=>(R&&R[i])||rule); const cnt=new Uint8Array(6);
+  function multiLayers(sp,rule,seeds,cols,cut,cellCap,delays,R){ delays=delays||seeds.map(()=>0); const lastD=Math.max(...delays); R=seeds.map((_,i)=>(R&&R[i])||rule); const cnt=new Uint8Array(6), last=new Int32Array(seeds.length).fill(-1);
     const K=sp.K, CM=sp.CM, K2=K*K,K3=K2*K,K4=K3*K,K5=K4*K,K6=K5*K;
     let span=0; for(const s of seeds) span=Math.max(span,Math.abs(s[0]),Math.abs(s[1]),Math.abs(s[2]));
     const N=2*(cut+3)+2*span+1, c0=cut+3+span, N2=N*N;
     let A=new Uint8Array(N*N2), B=new Uint8Array(N*N2), TA=new Uint8Array(N*N2), TB=new Uint8Array(N*N2);
     let mx=0,my=0,mz=0; for(const s of seeds){ mx+=s[0]; my+=s[1]; mz+=s[2]; } mx=c0+Math.floor(mx/seeds.length); my=c0+Math.floor(my/seeds.length); mz=c0+Math.floor(mz/seeds.length);
     let x0=N,x1=-1,y0=N,y1=-1,z0=N,z1=-1;
-    const put=(t)=>seeds.forEach((s,i)=>{ if(delays[i]!==t) return; const x=c0+s[0],y=c0+s[1],z=c0+s[2], j=z*N2+y*N+x; A[j]=cols[i]; TA[j]=i+1; x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y);z0=Math.min(z0,z);z1=Math.max(z1,z); });
+    const put=(t)=>seeds.forEach((s,i)=>{ if(delays[i]!==t) return; const x=c0+s[0],y=c0+s[1],z=c0+s[2], j=z*N2+y*N+x; A[j]=cols[i]; TA[j]=i+1; last[i]=t; x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y);z0=Math.min(z0,z);z1=Math.max(z1,z); });
     put(0); if(x1<0){ const s=seeds[delays.indexOf(Math.min(...delays))]; x0=x1=c0+s[0]; y0=y1=c0+s[1]; z0=z1=c0+s[2]; }
     const layers=[]; let stored=0, maxExt=0, life=0, truncated=false;
     const snap=()=>{ const nx=x1-x0+1, ny=y1-y0+1, nz=z1-z0+1, q=new Uint8Array(nx*ny*nz);
@@ -350,7 +353,7 @@ function core(G){
           let s2; if(c) s2=TA[i]; else { cnt.fill(0); if(xm)cnt[TA[i-1]]++; if(xp)cnt[TA[i+1]]++; if(ym)cnt[TA[i-N]]++; if(yp)cnt[TA[i+N]]++; if(zm)cnt[TA[i-N2]]++; if(zp)cnt[TA[i+N2]]++;
             s2=1; for(let k=2;k<6;k++) if(cnt[k]>cnt[s2]) s2=k; if(!cnt[s2]) for(let k=1;k<6;k++) if(cnt[k]){ s2=k; break; } }
           const v=R[s2-1][CM[li]]; B[i]=v;
-          if(v){ TB[i]=s2;
+          if(v){ TB[i]=s2; last[s2-1]=t;
             if(x<nx0)nx0=x; if(x>nx1)nx1=x; if(y<ny0)ny0=y; if(y>ny1)ny1=y; if(z<nz0)nz0=z; if(z>nz1)nz1=z; }
           else TB[i]=0; } }
       for(let z=z0-1;z<=z1+1;z++) for(let y=y0-1;y<=y1+1;y++){ const base=z*N2+y*N; for(let x=x0-1;x<=x1+1;x++){ const i=base+x; A[i]=B[i]; B[i]=0; TA[i]=TB[i]; TB[i]=0; } }
@@ -360,7 +363,7 @@ function core(G){
       if(stored+(x1-x0+1)*(y1-y0+1)*(z1-z0+1)>cellCap){ truncated=true; break; }
       snap();
     }
-    return {multi:true, life, truncated, layers, maxExt, maxWidth:2*maxExt+1};
+    return {multi:true, life, truncated, layers, maxExt, maxWidth:2*maxExt+1, spLife:seeds.map((q,i)=>last[i]<0?0:last[i]-delays[i]+1)};
   }
   G.makeSpace=makeSpace; G.fitness=fitness; G.multiLayers=multiLayers; G.evoStart=evoStart; G.evoSlice=evoSlice; G.evaluate=evaluate;
 }
@@ -550,7 +553,7 @@ function SeedsUI(DIM, onChange, ruleChoices){
     $s('sNote').textContent=active()
       ? 'Each starting cell grows by its own rule. A living cell keeps its rule; a newborn cell takes the rule most common among its living neighbours (ties go to the cell listed first). The whole space is simulated. Overlapping cells count once.'+(evo.checked?' Evolution scores each mutant on this arrangement, which is slower.':' Organisms are still evolved from one seed unless “Evolve with these starting cells” is on.')
       : 'One seed at the center: the classic setup.';
-    if(evo.checked&&active()) $s('sNote').textContent+=' While evolving, cells set to “This organism” carry the mutating rule; the others keep theirs fixed.';
+    if(evo.checked&&active()) $s('sNote').textContent+=' While evolving, cells set to “This organism” carry the mutating rule; the others keep theirs fixed. Every lineage has to survive: the shortest-lived one sets the fitness.';
     onChange&&onChange(); }
   $s('sN').onchange=()=>rebuild('all'); $s('sLay').onchange=()=>{ rnd=Date.now()%2147483647||1; rebuild('pos'); }; $s('sGap').onchange=()=>rebuild('pos');
   $s('sDel').onchange=()=>rebuild('del'); $s('sCol').onchange=()=>rebuild('col'); $s('sRul').onchange=()=>rebuild('rul'); $s('sEvo').onchange=changed; $s('sLin').onchange=()=>onChange&&onChange('lineage');
@@ -579,7 +582,7 @@ function show(rule,label){ stopPlay(); let res=SP.simulate(rule,dispCut(),{usage
   const lay=seedLayout();
   if(lay){ setLineage(lay.linCols); const solo=res, cap=Math.min(100,Math.max(60,dispCut()-60)), multi=G.multiLayers(SP,rule,lay.seeds,lay.cols,cap,30e6,lay.delays,lay.R); multi.usage=solo.usage; multi.cells=solo.cells;
     shown={rule:Uint8Array.from(rule),res:multi,label}; $('t').max=Math.max(1,multi.layers.length-1);
-    $('title3d').textContent=label+' · '+lay.txt+(multi.life?' · together they last '+multi.life+' steps':multi.truncated?' · grows without limit (first '+(multi.layers.length-1)+' steps shown)':' · still going at step '+cap)+' · alone: '+(solo.life?solo.life+(solo.life===1?' step':' steps'):'never dies');
+    $('title3d').textContent=label+' · '+lay.txt+(multi.life?' · together they last '+multi.life+' steps':multi.truncated?' · grows without limit (first '+(multi.layers.length-1)+' steps shown)':' · still going at step '+cap)+' · alone: '+(solo.life?solo.life+(solo.life===1?' step':' steps'):'never dies')+(multi.spLife.length>1?' · lineages last '+multi.spLife.join(' / ')+' steps':'');
     let used=0; for(let i=0;i<SP.NC;i++) used+=solo.usage[i];
     $('stat').textContent='together: '+(multi.life||'≥'+cap)+' steps · alone: '+(solo.life||'∞')+' · widest together '+multi.maxWidth+' cells · '+used+' of '+SP.NC+' cases used alone';
     $('ruleBox').value=Array.from(shown.rule).join(''); drawGenome(); showStep(Math.min(multi.layers.length-1,Math.max(0,Math.floor(multi.layers.length*0.45)))); return; }

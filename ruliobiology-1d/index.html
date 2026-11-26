@@ -219,8 +219,8 @@ function makeSpace(K,sym){ const key=K+(sym?'s':'a'); if(spaces[key]) return spa
     const usage=opt.usage?new Uint8Array(NC):null, rows=opt.rows?[]:null, cc=new Float64Array(K), tags=!!opt.tags;
     const grows=(R,E)=>{ const g=new Uint8Array(K); for(let a=1;a<K;a++){ let x=a, ok=1; for(let j=0;j<=K;j++){ x=R[E[x]]; if(!x){ ok=0; break; } } g[a]=ok; } return g; };
     const immR=RS.map(R=>grows(R,RIGHT)), immL=RS.map(R=>grows(R,LEFT));
-    const c0=MW>>1; let a=MA, b=MB, ta=TA, tb=TB, lo=MW, hi=-1, cells=0, maxW=1, minLo=MW, maxHi=-1, life=0, status=1, period=0;
-    const put=t=>seeds.forEach((q,i)=>{ if((q[3]||0)!==t) return; const x=c0+q[0]; a[x]=q[4]||1; ta[x]=i+1; cells++; cc[q[4]||1]++; if(x<lo)lo=x; if(x>hi)hi=x; });
+    const c0=MW>>1; let a=MA, b=MB, ta=TA, tb=TB, lo=MW, hi=-1, cells=0, maxW=1, minLo=MW, maxHi=-1, life=0, status=1, period=0; const last=new Int32Array(seeds.length).fill(-1);
+    const put=t=>seeds.forEach((q,i)=>{ if((q[3]||0)!==t) return; const x=c0+q[0]; a[x]=q[4]||1; ta[x]=i+1; last[i]=t; cells++; cc[q[4]||1]++; if(x<lo)lo=x; if(x>hi)hi=x; });
     put(0); if(hi<0){ lo=hi=c0+seeds[0][0]; }
     const snap=()=>{ if(lo<minLo)minLo=lo; if(hi>maxHi)maxHi=hi; if(rows) rows.push({lo:lo-c0,d:a.slice(lo,hi+1),tg:tags?ta.slice(lo,hi+1):null}); };
     snap(); let blo=lo, bhi=hi, sLo=-1, sHi=-1, power=1, lam=0;
@@ -230,7 +230,7 @@ function makeSpace(K,sym){ const key=K+(sym?'s':'a'); if(spaces[key]) return spa
       for(let x=lo-1;x<=hi+1;x++){ const li=(a[x-1]*K+a[x])*K+a[x+1]; if(!li){ b[x]=0; continue; }
         let sp; if(a[x]) sp=ta[x]; else { const l=a[x-1]?ta[x-1]:0, r=a[x+1]?ta[x+1]:0; sp=l&&r?Math.min(l,r):(l||r); }
         const ci=CM[li], v=RS[sp-1][ci]; b[x]=v; if(usage&&MAIN[sp-1]) usage[ci]=1;
-        if(v){ tb[x]=sp; cells++; cc[v]++; if(x<nlo) nlo=x; if(x>nhi) nhi=x; } }
+        if(v){ tb[x]=sp; last[sp-1]=t; cells++; cc[v]++; if(x<nlo) nlo=x; if(x>nhi) nhi=x; } }
       let T=a; a=b; b=T; T=ta; ta=tb; tb=T; blo=lo-1; bhi=hi+1;
       if(nhi<0&&t>lastD){ life=t; status=0; if(rows) rows.push({lo:0,d:new Uint8Array(0),tg:null,dead:true}); break; }
       if(nhi<0){ nlo=nhi=lo; }
@@ -241,7 +241,9 @@ function makeSpace(K,sym){ const key=K+(sym?'s':'a'); if(spaces[key]) return spa
       if(t>lastD){ if(lo===sLo&&hi===sHi){ let same=true; for(let x=lo;x<=hi;x++) if(a[x]!==MS[x]||ta[x]!==MSS[x]){ same=false; break; } if(same){ status=3; period=lam+1; break; } }
         if(++lam>=power||sLo<0){ if(sLo>=0){ MS.fill(0,sLo,sHi+1); MSS.fill(0,sLo,sHi+1); } for(let x=lo;x<=hi;x++){ MS[x]=a[x]; MSS[x]=ta[x]; } sLo=lo; sHi=hi; if(lam>=power) power*=2; lam=0; } }
     }
-    return {life, status, period, maxWidth:maxW, cells, cc, usage, rows, left:minLo-c0, right:maxHi-c0, multi:true};
+    // each lineage's lifespan: from its starting cell's step to its last living cell
+    const spLife=seeds.map((q,i)=>last[i]<0?0:last[i]-(q[3]||0)+1);
+    return {life, status, period, maxWidth:maxW, cells, cc, usage, rows, left:minLo-c0, right:maxHi-c0, multi:true, spLife};
   }
   return spaces[key]={K,sym,NC,CM,CEN,CASE,simulate,simulateMulti};
 }
@@ -250,14 +252,18 @@ function makeSpace(K,sym){ const key=K+(sym?'s':'a'); if(spaces[key]) return spa
 function fitness(res,p){
   if(p.type==='oscillate') return res.status===3&&res.period>1 ? res.period : 0;
   if(res.status!==0) return 0;
+  let f=0;
   switch(p.type){
-    case 'lifetime': return res.life;
-    case 'width': return res.maxWidth;
-    case 'tall': return res.life/res.maxWidth;
-    case 'wide': return res.maxWidth/res.life;
-    case 'mass': return res.cells/res.life;
-    case 'color': return res.cc[p.color]/res.cells;
-  } return 0; }
+    case 'lifetime': f=res.life; break;
+    case 'width': f=res.maxWidth; break;
+    case 'tall': f=res.life/res.maxWidth; break;
+    case 'wide': f=res.maxWidth/res.life; break;
+    case 'mass': f=res.cells/res.life; break;
+    case 'color': f=res.cc[p.color]/res.cells; break;
+  }
+  // several starting cells: every lineage has to survive, so the shortest-lived one sets the score
+  if(res.spLife&&res.spLife.length>1){ const m=Math.min(...res.spLife); f=p.type==='lifetime'?m:f*m/res.life; }
+  return f; }
 
 /* ---------- state ---------- */
 let K=4, SYM=true, SP=makeSpace(K,SYM);
@@ -313,7 +319,7 @@ function show(rule,label){ label=label.replace(/ · \d seeds?,.*$/,''); const mu
   const pk=multi?(SEEDS.evolve()&&params&&params.seeds&&!seedsDirty?{seeds:params.seeds,rules:params.rules}:SEEDS.pack(resolveRule)):null; const res=multi?SP.simulateMulti(rule,pk.seeds,dispCut(),{rows:true,usage:true,tags:true,rules:pk.rules}):SP.simulate(rule,dispCut(),{rows:true,usage:true}); shown={rule:Uint8Array.from(rule),res,label};
   paintImage(); $('t').max=Math.max(1,res.rows.length-1); if(view.fit||!view.s) fitView();
   const used=res.usage.reduce((a,b)=>a+b,0), fate=res.status===0?'dies at step '+res.life:res.status===3?'repeats with period '+res.period:res.status===2?'grows forever':'still alive at the cutoff';
-  if(multi){ const alone=SP.simulate(rule,dispCut()); $('title2d').textContent=label+' · '+SEEDS.describe()+' — together it '+fate.replace(/^still/,'is still')+' · alone it '+(alone.status===0?'dies at step '+alone.life:'never dies'); }
+  if(multi){ const alone=SP.simulate(rule,dispCut()); $('title2d').textContent=label+' · '+SEEDS.describe()+' — together it '+fate.replace(/^still/,'is still')+' · alone it '+(alone.status===0?'dies at step '+alone.life:'never dies')+(res.spLife&&res.spLife.length>1?' · lineages last '+res.spLife.join(' / ')+' steps':''); }
   else $('title2d').textContent=label+' — '+fate; $('stat').textContent=(res.status===0?'lifetime '+res.life:'lifetime ∞')+' · widest '+res.maxWidth+' cells · '+res.cells.toLocaleString()+' cell-steps · '+used+' of '+SP.NC+' cases used';
   $('ruleBox').value=Array.from(rule).join(''); drawGenome();
   if($('autogrow').checked&&res.rows.length>2){ step=0; startGrow(); } else setStep(res.rows.length-1); }
@@ -492,7 +498,7 @@ function SeedsUI(DIM, onChange, ruleChoices){
     $s('sNote').textContent=active()
       ? 'Each starting cell grows by its own rule. A living cell keeps its rule; a newborn cell takes the rule most common among its living neighbours (ties go to the cell listed first). The whole space is simulated. Overlapping cells count once.'+(evo.checked?' Evolution scores each mutant on this arrangement, which is slower.':' Organisms are still evolved from one seed unless “Evolve with these starting cells” is on.')
       : 'One seed at the center: the classic setup.';
-    if(evo.checked&&active()) $s('sNote').textContent+=' While evolving, cells set to “This organism” carry the mutating rule; the others keep theirs fixed.';
+    if(evo.checked&&active()) $s('sNote').textContent+=' While evolving, cells set to “This organism” carry the mutating rule; the others keep theirs fixed. Every lineage has to survive: the shortest-lived one sets the fitness.';
     onChange&&onChange(); }
   $s('sN').onchange=()=>rebuild('all'); $s('sLay').onchange=()=>{ rnd=Date.now()%2147483647||1; rebuild('pos'); }; $s('sGap').onchange=()=>rebuild('pos');
   $s('sDel').onchange=()=>rebuild('del'); $s('sCol').onchange=()=>rebuild('col'); $s('sRul').onchange=()=>rebuild('rul'); $s('sEvo').onchange=changed; $s('sLin').onchange=()=>onChange&&onChange('lineage');
