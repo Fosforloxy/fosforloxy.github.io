@@ -218,7 +218,7 @@ function core(G){
     // Full lattice, no symmetry assumed: several seeds, or one cell deleted mid-life. Port of the verified Python `full`.
     let FN=0,FA=null,FB=null,FS=null,fd=null;
     let FT=null, FTB=null;
-    function full(rule,seeds,cut,dmg,usage,rules){
+    function full(rule,seeds,cut,dmg,usage,rules,usages){
       const RS=seeds.map(s=>s[5]>=0&&rules&&rules[s[5]]?rules[s[5]]:rule), MIX=seeds.length>1, cnt=new Uint8Array(6), last=new Int32Array(seeds.length).fill(-1);
       let span=0; for(const s of seeds) span=Math.max(span,Math.abs(s[0]),Math.abs(s[1]),Math.abs(s[2]));
       const N=2*(cut+3)+2*span+1, c0=cut+3+span, N2=N*N;
@@ -226,6 +226,9 @@ function core(G){
       else if(fd){ for(let z=fd[4];z<=fd[5];z++) for(let y=fd[2];y<=fd[3];y++){ const b=z*N2+y*N; FA.fill(0,b+fd[0],b+fd[1]+1); FB.fill(0,b+fd[0],b+fd[1]+1); FS.fill(0,b+fd[0],b+fd[1]+1); FT.fill(0,b+fd[0],b+fd[1]+1); FTB.fill(0,b+fd[0],b+fd[1]+1); } }
       const A=FA,B=FB,S=FS,T=FT,TB=FTB, imm=new Uint8Array(K);
       for(let a=1;a<K;a++){ let x=a, ok=1; for(let j=0;j<=K;j++){ x=rule[EDGE[x]]; if(!x){ ok=0; break; } } imm[a]=ok; }
+      // with several lineages, an edge cell grows forever by its own lineage's rule
+      const immS=MIX?RS.map(R=>{ const m=new Uint8Array(K); for(let a=1;a<K;a++){ let x=a, ok=1; for(let j=0;j<=K;j++){ x=R[EDGE[x]]; if(!x){ ok=0; break; } } m[a]=ok; } return m; }):null;
+      const ED=i=>{ const v=A[i]; return v&&(MIX?immS[T[i]-1][v]:imm[v]); };
       let x0=N,x1=-1,y0=N,y1=-1,z0=N,z1=-1;
       let lastD=0; for(const [si,s] of seeds.entries()){ const d=s[3]||0; if(d>lastD) lastD=d; if(d) continue; const x=c0+s[0],y=c0+s[1],z=c0+s[2]; A[z*N2+y*N+x]=s[4]||1; T[z*N2+y*N+x]=si+1; last[si]=0; if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; if(z<z0)z0=z; if(z>z1)z1=z; }
       // starting cells with a delay are set at their step (overwriting whatever is there)
@@ -241,9 +244,9 @@ function core(G){
             if(dmg.which===0){ if(best<0||d<best){ best=d; bi=i; } } else if(dmg.which===1){ if(d>best){ best=d; bi=i; } } else { if(cnt===-1){} cnt++; } }
           if(dmg.which===2 && cnt>0){ const want=dmg.k%cnt; cnt=0; for(let z=z0;z<=z1;z++) for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){ const i=z*N2+y*N+x; if(A[i]){ if(cnt===want) bi=i; cnt++; } } }
           if(bi>=0){ A[bi]=0; dmgOk=1; } sb=null; power=1; lam=0; }
-        for(let z=z0;z<=z1;z++) for(let y=y0;y<=y1;y++) if(imm[A[z*N2+y*N+x0]]||imm[A[z*N2+y*N+x1]]) return out(0,2,0);
-        for(let z=z0;z<=z1;z++) for(let x=x0;x<=x1;x++) if(imm[A[z*N2+y0*N+x]]||imm[A[z*N2+y1*N+x]]) return out(0,2,0);
-        for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++) if(imm[A[z0*N2+y*N+x]]||imm[A[z1*N2+y*N+x]]) return out(0,2,0);
+        for(let z=z0;z<=z1;z++) for(let y=y0;y<=y1;y++) if(ED(z*N2+y*N+x0)||ED(z*N2+y*N+x1)) return out(0,2,0);
+        for(let z=z0;z<=z1;z++) for(let x=x0;x<=x1;x++) if(ED(z*N2+y0*N+x)||ED(z*N2+y1*N+x)) return out(0,2,0);
+        for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++) if(ED(z0*N2+y*N+x)||ED(z1*N2+y*N+x)) return out(0,2,0);
         if(t>=cut) return out(0,1,0);
         let nx0=N,nx1=-1,ny0=N,ny1=-1,nz0=N,nz1=-1;
         for(let z=z0-1;z<=z1+1;z++) for(let y=y0-1;y<=y1+1;y++){ const base=z*N2+y*N;
@@ -251,8 +254,8 @@ function core(G){
             if(!li){ B[i]=0; TB[i]=0; continue; } const ci=CM[li]; let v;
             if(!MIX){ usage[ci]=1; v=rule[ci]; }
             else { let s2; if(A[i]) s2=T[i]; else { cnt.fill(0); if(A[i-1])cnt[T[i-1]]++; if(A[i+1])cnt[T[i+1]]++; if(A[i-N])cnt[T[i-N]]++; if(A[i+N])cnt[T[i+N]]++; if(A[i-N2])cnt[T[i-N2]]++; if(A[i+N2])cnt[T[i+N2]]++;
-                let m=0, nt=0; for(let k=1;k<6;k++) if(cnt[k]>m){ m=cnt[k]; nt=1; } else if(cnt[k]===m&&m) nt++; let pick=nt>1?((Math.imul(x,73856093)^Math.imul(y,19349663)^Math.imul(z,83492791)^Math.imul(t,2654435761))>>>7)%nt:0; s2=1; for(let k=1;k<6;k++) if(cnt[k]===m){ if(!pick){ s2=k; break; } pick--; } }
-              const R=RS[s2-1]; if(R===rule) usage[ci]=1; v=R[ci]; TB[i]=v?s2:0; if(v) last[s2-1]=t+1; }
+                let m=0, nt=0; for(let k=1;k<6;k++) if(cnt[k]>m){ m=cnt[k]; nt=1; } else if(cnt[k]===m&&m) nt++; let pick=nt>1?((Math.imul(x-c0,73856093)^Math.imul(y-c0,19349663)^Math.imul(z-c0,83492791)^Math.imul(t+1,2654435761))>>>7)%nt:0; s2=1; for(let k=1;k<6;k++) if(cnt[k]===m){ if(!pick){ s2=k; break; } pick--; } }
+              const R=RS[s2-1]; if(R===rule) usage[ci]=1; if(usages) usages[s2-1][ci]=1; v=R[ci]; TB[i]=v?s2:0; if(v) last[s2-1]=t+1; }
             B[i]=v;
             if(v){ if(x<nx0)nx0=x; if(x>nx1)nx1=x; if(y<ny0)ny0=y; if(y>ny1)ny1=y; if(z<nz0)nz0=z; if(z>nz1)nz1=z; } } }
         for(let z=z0-1;z<=z1+1;z++) for(let y=y0-1;y<=y1+1;y++){ const base=z*N2+y*N; for(let x=x0-1;x<=x1+1;x++){ A[base+x]=B[base+x]; B[base+x]=0; if(MIX){ T[base+x]=TB[base+x]; TB[base+x]=0; } } }
@@ -294,7 +297,7 @@ function core(G){
       if(r.status!==0) return {f:0,used}; const W=2*r.maxExt+1, L=r.life;
       let f=p.type==='width'?W+L*1e-4:p.type==='tall'?L/W:p.type==='wide'?W/L:L;
       // every lineage has to survive: the shortest-lived one sets the score
-      if(r.spLife&&r.spLife.length>1){ const m=Math.min(...r.spLife); f=p.type==='lifetime'?m:f*m/L; }
+      if(r.spLife&&r.spLife.length>1){ const m=Math.min(...r.spLife), avg=r.spLife.reduce((x,y)=>x+y,0)/r.spLife.length, sm=m+Math.min(0.999,avg/1000); f=p.type==='lifetime'?sm:f*sm/L; }
       return {f,used}; }
     if(!DEEP[p.type]){ const r=sp.simulate(rule,p.maxSteps,{usage:true}); return {f:fitness(r,p.type,p.color), used:r.usage}; }
     const cut=Math.min(p.maxSteps,100), used=new Uint8Array(sp.NC), s=sp.full(rule,SOLO,cut,null,used), L=s.life;
@@ -310,10 +313,27 @@ function core(G){
     let f=L;
     for(const dist of [3,8]){ const j=sp.full(rule,[[0,0,0],[dist,0,0]],cut,null,used); if(j.status!==0) return {f:0,used}; if(j.life<f) f=j.life; if(f<cur) return {f:-1,used}; }
     return {f,used}; }
+  // co-evolution with several starting cells: cell k grows by genome[k]; scored on the full lattice, shortest lineage
+  function evaluateG(sp,genome,p){ const cut=Math.min(p.maxSteps,100), used=new Uint8Array(sp.NC), usedG=genome.map(()=>new Uint8Array(sp.NC));
+    const r=sp.full(genome[0],p.seeds.map((q,k)=>[q[0],q[1],q[2],q[3],q[4],k]),cut,null,used,genome,usedG);
+    if(r.status!==0) return {f:0,usedG}; const W=2*r.maxExt+1, L=r.life;
+    let f=p.type==='width'?W+L*1e-4:p.type==='tall'?L/W:p.type==='wide'?W/L:L;
+    if(r.spLife&&r.spLife.length>1){ const m=Math.min(...r.spLife), avg=r.spLife.reduce((x,y)=>x+y,0)/r.spLife.length, sm=m+Math.min(0.999,avg/1000); f=p.type==='lifetime'?sm:f*sm/L; }
+    return {f,usedG}; }
   // One lineage's state and a time-sliced step. Used by background workers and by the in-page fallback alike.
   function evoStart(m){ const sp=makeSpace(m.K), st={sp, rule:Uint8Array.from(m.rule), i:m.i||0, end:(m.i||0)+m.budget, p:m, sims:0};
+    if(m.genome){ st.genome=m.genome.map(r=>Uint8Array.from(r)); st.rule=st.genome[0]; const r=evaluateG(sp,st.genome,m); st.cur=r.f; st.usedG=r.usedG; return st; }
     const r=evaluate(sp,st.rule,m,0); st.cur=r.f; st.used=r.used; return st; }
   function evoSlice(st,ms){ const p=st.p, sp=st.sp, K=sp.K, t0=Date.now(), imps=[];
+    if(st.genome){ while(st.i<st.end && Date.now()-t0<ms){
+        const c=Math.floor(Math.random()*st.genome.length), R=st.genome[c], idx=1+Math.floor(Math.random()*(sp.NC-1)), old=R[idx];
+        let nv; do { nv = Math.random()<p.pw ? 0 : 1+Math.floor(Math.random()*(K-1)); } while(nv===old);
+        R[idx]=nv; st.i++;
+        if(!st.usedG[c][idx] && st.cur>0) continue;     // that cell's lineage never meets this case: neutral, accept
+        st.sims++; const r=evaluateG(sp,st.genome,p), f=r.f;
+        if(f>=st.cur && f>0){ if(f>st.cur) imps.push({i:st.i,f,rule:Array.from(st.genome[0]),genome:st.genome.map(g=>Array.from(g))}); st.cur=f; st.usedG=r.usedG; }
+        else R[idx]=old; }
+      return imps; }
     while(st.i<st.end && Date.now()-t0<ms){
       const idx=1+Math.floor(Math.random()*(sp.NC-1)), old=st.rule[idx];
       let nv; do { nv = Math.random()<p.pw ? 0 : 1+Math.floor(Math.random()*(K-1)); } while(nv===old);
@@ -352,7 +372,7 @@ function core(G){
         for(let x=x0-1;x<=x1+1;x++){ const i=base+x, c=A[i], xm=A[i-1], xp=A[i+1], ym=A[i-N], yp=A[i+N], zm=A[i-N2], zp=A[i+N2];
           const li=c*K6+xm*K5+xp*K4+ym*K3+yp*K2+zm*K+zp; if(!li){ B[i]=0; TB[i]=0; continue; }
           let s2; if(c) s2=TA[i]; else { cnt.fill(0); if(xm)cnt[TA[i-1]]++; if(xp)cnt[TA[i+1]]++; if(ym)cnt[TA[i-N]]++; if(yp)cnt[TA[i+N]]++; if(zm)cnt[TA[i-N2]]++; if(zp)cnt[TA[i+N2]]++;
-            let m=0, nt=0; for(let k=1;k<6;k++) if(cnt[k]>m){ m=cnt[k]; nt=1; } else if(cnt[k]===m&&m) nt++; let pick=nt>1?((Math.imul(x,73856093)^Math.imul(y,19349663)^Math.imul(z,83492791)^Math.imul(t,2654435761))>>>7)%nt:0; s2=1; for(let k=1;k<6;k++) if(cnt[k]===m){ if(!pick){ s2=k; break; } pick--; } }
+            let m=0, nt=0; for(let k=1;k<6;k++) if(cnt[k]>m){ m=cnt[k]; nt=1; } else if(cnt[k]===m&&m) nt++; let pick=nt>1?((Math.imul(x-c0,73856093)^Math.imul(y-c0,19349663)^Math.imul(z-c0,83492791)^Math.imul(t,2654435761))>>>7)%nt:0; s2=1; for(let k=1;k<6;k++) if(cnt[k]===m){ if(!pick){ s2=k; break; } pick--; } }
           const v=R[s2-1][CM[li]]; B[i]=v;
           if(v){ TB[i]=s2; last[s2-1]=t;
             if(x<nx0)nx0=x; if(x>nx1)nx1=x; if(y<ny0)ny0=y; if(y>ny1)ny1=y; if(z<nz0)nz0=z; if(z>nz1)nz1=z; }
@@ -382,7 +402,7 @@ const G={}; core(G);
 let st=null, stop=false;
 onmessage=({data:m})=>{ if(m.cmd==='start'){ st=G.evoStart(m); stop=false; run(); } else if(m.cmd==='stop'){ stop=true; } };
 function run(){ const imps=G.evoSlice(st,80), done=st.i>=st.end||stop;
-  postMessage({type:done?'done':'tick', i:st.i, sims:st.sims, cur:st.cur, imps, rule:done?Array.from(st.rule):null});
+  postMessage({type:done?'done':'tick', i:st.i, sims:st.sims, cur:st.cur, imps, rule:done?Array.from(st.rule):null, genome:done&&st.genome?st.genome.map(g=>Array.from(g)):null});
   if(!done) setTimeout(run,0); }`;
 let evoURL=null; try{ evoURL=URL.createObjectURL(new Blob([evoSrc],{type:'text/javascript'})); }catch(e){ evoURL=null; }
 function showErr(t){ const el=$('err'); el.textContent=t; el.style.display=t?'block':'none'; }
@@ -500,7 +520,7 @@ function SeedsUI(DIM, onChange, ruleChoices){
   </div>
   <div class="row">
     <div><label class="f" for="sCol">Starting states</label><select id="sCol"><option value="same">All the seed color</option><option value="alt">Alternate two colors</option><option value="cycle">Cycle through colors</option></select></div>
-    <div><label class="f" for="sRul">Rules</label><select id="sRul"><option value="same">Same rule for every cell</option><option value="lin">This organism + a lineage each</option></select></div>
+    <div><label class="f" for="sRul">Rules</label><select id="sRul"><option value="same">Same rule for every cell</option><option value="lin">A different lineage each</option></select></div>
   </div>
   <table class="seedtbl" id="sTbl"></table>
   <div class="check"><input type="checkbox" id="sEvo"><label for="sEvo">Evolve with these starting cells</label></div>
@@ -537,7 +557,7 @@ function SeedsUI(DIM, onChange, ruleChoices){
     const old=S; S=[]; for(let i=0;i<N;i++){ const o=old[i]||{p:[0,0,0],d:0,c:1};
       const rs=$s('sRul').value, ids=ruleChoices().map(c=>c.id), lin=ids.filter(id=>/^L\d/.test(id));
       S.push({p:(what==='all'||what==='pos')?P[i]:o.p.slice(), d:(what==='all'||what==='del')?i*del:o.d, c:(what==='all'||what==='col')?(cs==='same'?1:cs==='alt'?(i%2?Math.min(2,K-1):1):1+(i%(K-1))):Math.min(o.c,K-1),
-        r:(what==='all'||what==='rul')?(rs==='same'||i===0?'shown':(lin[i-1]||'shown')):(o.r||'shown')}); }
+        r:(what==='all'||what==='rul')?(rs==='same'?'shown':(lin[i]||'shown')):(o.r||'shown')}); }
     table(); changed(); }
   function table(){ const t=$s('sTbl'), ch=ruleChoices(); let h=`<tr><th>#</th>${AX.map(a=>`<th>${a}</th>`).join('')}<th>delay</th><th>state</th><th>rule</th></tr>`;
     S.forEach((s,i)=>{ h+=`<tr><td><span class="dot" style="background:${SEEDCOL[i]}"></span>${i+1}</td>`+
@@ -560,11 +580,10 @@ function SeedsUI(DIM, onChange, ruleChoices){
     $s('sNote').textContent=active()
       ? 'Each starting cell grows by its own rule. A living cell keeps its rule; a newborn cell takes the rule most common among its living neighbours, with ties broken evenly by position and time so no cell is favoured. The whole space is simulated. Overlapping cells count once.'+(evo.checked?' Evolution scores each mutant on this arrangement, which is slower.':' Organisms are still evolved from one seed unless “Evolve with these starting cells” is on.')
       : 'One seed at the center: the classic setup.';
-    if(evo.checked&&active()) $s('sNote').textContent+=' While evolving, cells set to “This organism” carry the mutating rule; the others keep theirs fixed. Every lineage has to survive: the shortest-lived one sets the fitness.';
+    if(evo.checked&&active()) $s('sNote').textContent+=' While evolving, every cell’s rule evolves: each mutation changes one case of one cell’s rule, starting from the rule picked in its row (“this” = the organism shown). Every lineage has to survive: the shortest-lived one sets the fitness.';
     const w=problem(); $s('sWarn').textContent=w; $s('sWarn').style.display=w?'block':'none';
     onChange&&onChange(); }
-  // evolving with starting cells only makes sense if at least one cell carries the rule being evolved
-  function problem(){ if(!($s('sEvo').checked&&active())) return ''; return list().some(s=>s.r==='shown')?'':'No starting cell is set to “this”, so the rule being evolved has nowhere to grow: every mutant would score the same. Set at least one cell’s rule to “this”.'; }
+  function problem(){ return ''; }
   $s('sN').onchange=()=>rebuild('all'); $s('sLay').onchange=()=>{ rnd=Date.now()%2147483647||1; rebuild('pos'); }; $s('sGap').onchange=()=>rebuild('pos');
   $s('sDel').onchange=()=>rebuild('del'); $s('sCol').onchange=()=>rebuild('col'); $s('sRul').onchange=()=>rebuild('rul'); $s('sEvo').onchange=changed; $s('sLin').onchange=()=>onChange&&onChange('lineage');
   rebuild('all');
@@ -592,18 +611,19 @@ function SeedsUI(DIM, onChange, ruleChoices){
         let end=-1; for(let t=sr.length-1;t>=0;t--) if(sr[t]>0){ end=t; break; }
         if(end>=0&&end<sr.length-1){ ctx.strokeStyle='#1e1e1e'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(X(end)+1,4); ctx.lineTo(X(end)+1,H-2); ctx.stroke(); } }); } };
 }
-let SEEDS=null, seedsDirty=false;
+let SEEDS=null, seedsDirty=false, shownGenome=null;
 // rules a starting cell can follow: the organism shown, an example, or any lineage's latest rule
 const ruleChoices=()=>[{id:'shown',label:'This organism',short:'this'}].concat((EXAMPLES[K]||[]).map((_,k)=>({id:'ex'+(k+1),label:'Example '+(k+1),short:'ex'+(k+1)})))
   .concat(lineages.map((L,k)=>({id:'L'+(k+1),label:'Lineage '+(k+1),short:'L'+(k+1)})));
 const resolveRule=id=>{ let m=/^ex(\d+)$/.exec(id); if(m) return (EXAMPLES[K]||[])[+m[1]-1]?EXAMPLES[K][+m[1]-1].rule:null; m=/^L(\d+)$/.exec(id); return m&&lineages[+m[1]-1]?lineages[+m[1]-1].rule:null; };
-function seedLayout(){ if(!SEEDS||!SEEDS.active()) return null; const L=SEEDS.list();
+function seedLayout(genome){ const useG=genome&&params&&params.seeds&&!seedsDirty&&genome.length===params.seeds.length; if(!useG&&(!SEEDS||!SEEDS.active())) return null; const L=SEEDS.list();
+  if(useG){ const q=params.seeds; return {seeds:q.map(v=>[v[0],v[1],v[2]]), cols:q.map(v=>v[4]), delays:q.map(v=>v[3]), R:genome.map(g=>Uint8Array.from(g)), linCols:q.map((v,k)=>SEEDS.SEEDCOL[(L[k]||{i:k}).i]), txt:SEEDS.describe()}; }
   // while showing what evolution produced, use the rules it was scored against, until the cells are changed
   const pk=SEEDS.evolve()&&params&&params.seeds&&!seedsDirty?{seeds:params.seeds,rules:params.rules}:SEEDS.pack(resolveRule);
   return {seeds:pk.seeds.map(q=>[q[0],q[1],q[2]]), cols:pk.seeds.map(q=>q[4]), delays:pk.seeds.map(q=>q[3]), R:pk.seeds.map(q=>q[5]>=0?Uint8Array.from(pk.rules[q[5]]):null),
     linCols:L.map(q=>SEEDS.SEEDCOL[q.i]), txt:SEEDS.describe()}; }
-function show(rule,label){ stopPlay(); let res=SP.simulate(rule,dispCut(),{usage:true});
-  const lay=seedLayout();
+function show(rule,label,genome){ stopPlay(); let res=SP.simulate(rule,dispCut(),{usage:true});
+  const lay=seedLayout(genome); shownGenome=genome&&lay&&lay.R&&genome.length===lay.R.length?genome:null;
   if(lay){ setLineage(lay.linCols); const solo=res, cap=Math.min(100,Math.max(60,dispCut()-60)), multi=G.multiLayers(SP,rule,lay.seeds,lay.cols,cap,30e6,lay.delays,lay.R); multi.usage=solo.usage; multi.cells=solo.cells; SEEDS.drawSeries(multi);
     shown={rule:Uint8Array.from(rule),res:multi,label}; $('t').max=Math.max(1,multi.layers.length-1);
     $('title3d').textContent=label+' · '+lay.txt+(multi.life?' · together they last '+multi.life+' steps':multi.truncated?' · grows without limit (first '+(multi.layers.length-1)+' steps shown)':' · still going at step '+cap)+' · alone: '+(solo.life?solo.life+(solo.life===1?' step':' steps'):'never dies')+(multi.spLife.length>1?' · lineages last '+multi.spLife.join(' / ')+' steps':'');
@@ -635,9 +655,9 @@ function card(rule,lbl,sel,onclick){ const b=document.createElement('button'); b
 const fmt=f=>f>=100?f.toFixed(0):f>=10?f.toFixed(1):f.toFixed(2);
 function renderPop(){ const el=$('pop'); el.textContent='';
   if(!lineages.length){ (EXAMPLES[K]||[]).forEach((ex,k)=>el.appendChild(card(ex.rule,'example '+(k+1),shown&&shown.label==='Example '+(k+1),()=>{ show(ex.rule,'Example '+(k+1)); renderPop(); }))); return; }
-  lineages.forEach((L,k)=>el.appendChild(card(L.rule,'L'+(k+1)+' · '+fmt(L.cur),k===selected,()=>{ selected=k; show(L.rule,'Lineage '+(k+1)+', latest'); renderPop(); renderLin(); drawChart(); }))); }
+  lineages.forEach((L,k)=>el.appendChild(card(L.rule,'L'+(k+1)+' · '+fmt(L.cur),k===selected,()=>{ selected=k; show(L.rule,'Lineage '+(k+1)+', latest',L.genome); renderPop(); renderLin(); drawChart(); }))); }
 function renderLin(){ const el=$('lin'); el.textContent=''; const L=lineages[selected]; if(!L) return;
-  L.imps.slice(-40).forEach(im=>el.appendChild(card(im.rule,'#'+im.i+' · '+fmt(im.f),false,()=>show(im.rule,'Lineage '+(selected+1)+' at mutation '+im.i)))); el.scrollLeft=el.scrollWidth; }
+  L.imps.slice(-40).forEach(im=>el.appendChild(card(im.rule,'#'+im.i+' · '+fmt(im.f),false,()=>show(im.rule,'Lineage '+(selected+1)+' at mutation '+im.i,im.genome)))); el.scrollLeft=el.scrollWidth; }
 
 /* ---------- chart ---------- */
 function drawChart(){ const cv=$('chart'), ctx=cv.getContext('2d'), W=cv.width, H=cv.height; ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H); if(!lineages.length) return;
@@ -653,17 +673,18 @@ function readParams(){ return {K, type:$('ftype').value, color:+$('fcolor').valu
 function setRunning(on){ $('go').disabled=on; $('cont').disabled=on||!lineages.length; $('stop').disabled=!on; $('K').disabled=on; if(SEEDS) SEEDS.refreshRules(); }
 let noWorkers=false, locals=[], pumping=false;
 function onMsg(L,m){ L.i=m.i; L.sims=m.sims; L.cur=m.cur;
-  m.imps.forEach(im=>{ L.imps.push({i:im.i,f:im.f,rule:Uint8Array.from(im.rule)}); L.hist.push([im.i,im.f]); L.rule=Uint8Array.from(im.rule); });
-  if(m.type==='done'){ L.rule=Uint8Array.from(m.rule); if(L.worker){ L.worker.terminate(); L.worker=null; } L.local=null; running--; if(running<=0){ running=0; setRunning(false); } }
+  m.imps.forEach(im=>{ const g=im.genome?im.genome.map(r=>Uint8Array.from(r)):null; L.imps.push({i:im.i,f:im.f,rule:Uint8Array.from(im.rule),genome:g}); L.hist.push([im.i,im.f]); L.rule=Uint8Array.from(im.rule); if(g) L.genome=g; });
+  if(m.type==='done'){ L.rule=Uint8Array.from(m.rule); if(m.genome) L.genome=m.genome.map(r=>Uint8Array.from(r)); if(L.worker){ L.worker.terminate(); L.worker=null; } L.local=null; running--; if(running<=0){ running=0; setRunning(false); } }
   schedule(); }
-function startMsg(L){ return {cmd:'start',K,rule:Array.from(L.rule),i:L.i,budget:L.target-L.i,type:params.type,color:params.color,maxSteps:params.maxSteps,pw:params.pw,seeds:params.seeds,rules:params.rules}; }
+function startMsg(L){ return {cmd:'start',K,rule:Array.from(L.rule),i:L.i,budget:L.target-L.i,type:params.type,color:params.color,maxSteps:params.maxSteps,pw:params.pw,seeds:params.seeds,rules:params.rules,
+  genome:params.seeds?(L.genome||params.seeds.map(q=>q[5]<0?Array.from(L.rule):Array.from(params.rules[q[5]]))).map(r=>Array.from(r)):null}; }
 function useFallback(L,why){ if(!noWorkers){ noWorkers=true; $('mode').textContent='Running in the page itself because background workers are unavailable here'+(why?' ('+why+')':'')+'. It is slower and the page may stutter.'; $('mode').style.display='block'; }
   if(L.worker){ try{ L.worker.terminate(); }catch(e){} L.worker=null; }
   try{ L.local={st:G.evoStart(startMsg(L)),stop:false}; locals.push(L); pump(); }catch(e){ showErr('Evolution could not start: '+e.message); running--; if(running<=0){ running=0; setRunning(false); } } }
 function pump(){ if(pumping) return; pumping=true;
   (function slice(){ locals=locals.filter(L=>L.local); if(!locals.length){ pumping=false; return; }
     for(const L of locals){ const st=L.local.st, imps=G.evoSlice(st,Math.max(8,40/locals.length)), done=st.i>=st.end||L.local.stop;
-      onMsg(L,{type:done?'done':'tick',i:st.i,sims:st.sims,cur:st.cur,imps,rule:done?Array.from(st.rule):null}); }
+      onMsg(L,{type:done?'done':'tick',i:st.i,sims:st.sims,cur:st.cur,imps,rule:done?Array.from(st.rule):null,genome:done&&st.genome?st.genome.map(g=>Array.from(g)):null}); }
     setTimeout(slice,0); })(); }
 function startLineage(L){ running++; L.target=L.i+params.budget;
   if(noWorkers||!evoURL||typeof Worker==='undefined'){ useFallback(L,''); return; }
@@ -679,7 +700,7 @@ function refresh(){ let done=0,tot=0,sims=0; lineages.forEach(L=>{ done+=L.i-(L.
   $('pbar').style.width=(tot?100*done/tot:0)+'%'; $('progress').textContent=(running?'running · ':'done · ')+sims.toLocaleString()+' mutants tested';
   if(selected<0||!lineages[selected]) selected=0;
   const best=lineages.reduce((b,L,k)=>L.cur>lineages[b].cur?k:b,0);
-  if(running && lineages[best].cur>lastBest && !playing && performance.now()-lastTouch>4000){ lastBest=lineages[best].cur; selected=best; show(lineages[best].rule,'Lineage '+(best+1)+', latest'); }
+  if(running && lineages[best].cur>lastBest && !playing && performance.now()-lastTouch>4000){ lastBest=lineages[best].cur; selected=best; show(lineages[best].rule,'Lineage '+(best+1)+', latest',lineages[best].genome); }
   renderPop(); renderLin(); drawChart(); }
 $('go').onclick=()=>{ if(SEEDS&&SEEDS.blockEvolve()) return; halt(); showErr(''); seedsDirty=false; params=readParams(); lineages=[]; selected=0; lastBest=-1;
   const n=Math.max(1,Math.min(8,+$('nLin').value|0)); for(let k=0;k<n;k++) lineages.push({rule:new Uint8Array(SP.NC),i:0,sims:0,cur:0,imps:[],hist:[]});
@@ -695,7 +716,7 @@ function setK(k){ K=k; SP=G.makeSpace(K); $('ncDisp').value=SP.NC; $('budget').v
   const ex=(EXAMPLES[K]||[])[0]; if(ex) show(ex.rule,'Example 1'); else { const r=new Uint8Array(SP.NC); show(r,'The seed alone (null rule)'); }
   renderPop(); renderLin(); drawChart(); $('pbar').style.width='0'; $('progress').textContent=''; }
 $('K').onchange=function(){ setK(+this.value); };
-SEEDS=SeedsUI(3,(what)=>{ if(!shown) return; if(what==='lineage') showStep(step); else { seedsDirty=true; show(shown.rule,shown.label.replace(/ ·.*$/,'')); } }, ruleChoices); SEEDS.setK(K);
+SEEDS=SeedsUI(3,(what)=>{ if(!shown) return; if(what==='lineage') showStep(step); else { seedsDirty=true; show(shown.rule,shown.label.replace(/ ·.*$/,''),shownGenome); } }, ruleChoices); SEEDS.setK(K);
 const FITNOTE={oscillate:'Rewards an exact repeating cycle: 1000 + 10 × period + half-width; a motionless still life scores 500. Until one appears, lifetime is rewarded. In tests most lineages found a cycle.',
   twoseed:'Fitness is the shortest of three lifetimes: alone, and with a second seed 3 and 8 cells away. Slow: each mutant needs up to three full runs. In tests the winners were short and thin.',
   damage:'Lifetime × share of four fixed single-cell deletions it shrugs off. In tests this learned those four deletions and did not become robust in general.'};
