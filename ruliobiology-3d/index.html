@@ -500,12 +500,13 @@ function SeedsUI(DIM, onChange, ruleChoices){
   </div>
   <div class="row">
     <div><label class="f" for="sCol">Starting states</label><select id="sCol"><option value="same">All the seed color</option><option value="alt">Alternate two colors</option><option value="cycle">Cycle through colors</option></select></div>
-    <div><label class="f" for="sRul">Rules</label><select id="sRul"><option value="same">Same rule for every cell</option><option value="lin">A different lineage each</option></select></div>
+    <div><label class="f" for="sRul">Rules</label><select id="sRul"><option value="same">Same rule for every cell</option><option value="lin">This organism + a lineage each</option></select></div>
   </div>
   <table class="seedtbl" id="sTbl"></table>
   <div class="check"><input type="checkbox" id="sEvo"><label for="sEvo">Evolve with these starting cells</label></div>
   <div class="check"><input type="checkbox" id="sLin"><label for="sLin">Color by starting cell (shows each rule's territory)</label></div>
   <div class="note" id="sNote"></div>
+  <div class="note" id="sWarn" style="display:none;color:#8f2a22;background:#fdf1ef;border:1px solid #e3a59f;border-radius:4px;padding:6px 8px;margin-top:6px"></div>
   <div id="sChart"></div>`;
   const css=document.createElement('style'); css.textContent=`
     .seedtbl{width:100%;border-collapse:collapse;margin-top:8px;font-size:11.5px;font-variant-numeric:tabular-nums}
@@ -536,7 +537,7 @@ function SeedsUI(DIM, onChange, ruleChoices){
     const old=S; S=[]; for(let i=0;i<N;i++){ const o=old[i]||{p:[0,0,0],d:0,c:1};
       const rs=$s('sRul').value, ids=ruleChoices().map(c=>c.id), lin=ids.filter(id=>/^L\d/.test(id));
       S.push({p:(what==='all'||what==='pos')?P[i]:o.p.slice(), d:(what==='all'||what==='del')?i*del:o.d, c:(what==='all'||what==='col')?(cs==='same'?1:cs==='alt'?(i%2?Math.min(2,K-1):1):1+(i%(K-1))):Math.min(o.c,K-1),
-        r:(what==='all'||what==='rul')?(rs==='same'?'shown':(lin[i]||ids[i]||'shown')):(o.r||'shown')}); }
+        r:(what==='all'||what==='rul')?(rs==='same'||i===0?'shown':(lin[i-1]||'shown')):(o.r||'shown')}); }
     table(); changed(); }
   function table(){ const t=$s('sTbl'), ch=ruleChoices(); let h=`<tr><th>#</th>${AX.map(a=>`<th>${a}</th>`).join('')}<th>delay</th><th>state</th><th>rule</th></tr>`;
     S.forEach((s,i)=>{ h+=`<tr><td><span class="dot" style="background:${SEEDCOL[i]}"></span>${i+1}</td>`+
@@ -560,7 +561,10 @@ function SeedsUI(DIM, onChange, ruleChoices){
       ? 'Each starting cell grows by its own rule. A living cell keeps its rule; a newborn cell takes the rule most common among its living neighbours, with ties broken evenly by position and time so no cell is favoured. The whole space is simulated. Overlapping cells count once.'+(evo.checked?' Evolution scores each mutant on this arrangement, which is slower.':' Organisms are still evolved from one seed unless “Evolve with these starting cells” is on.')
       : 'One seed at the center: the classic setup.';
     if(evo.checked&&active()) $s('sNote').textContent+=' While evolving, cells set to “This organism” carry the mutating rule; the others keep theirs fixed. Every lineage has to survive: the shortest-lived one sets the fitness.';
+    const w=problem(); $s('sWarn').textContent=w; $s('sWarn').style.display=w?'block':'none';
     onChange&&onChange(); }
+  // evolving with starting cells only makes sense if at least one cell carries the rule being evolved
+  function problem(){ if(!($s('sEvo').checked&&active())) return ''; return list().some(s=>s.r==='shown')?'':'No starting cell is set to “this”, so the rule being evolved has nowhere to grow: every mutant would score the same. Set at least one cell’s rule to “this”.'; }
   $s('sN').onchange=()=>rebuild('all'); $s('sLay').onchange=()=>{ rnd=Date.now()%2147483647||1; rebuild('pos'); }; $s('sGap').onchange=()=>rebuild('pos');
   $s('sDel').onchange=()=>rebuild('del'); $s('sCol').onchange=()=>rebuild('col'); $s('sRul').onchange=()=>rebuild('rul'); $s('sEvo').onchange=changed; $s('sLin').onchange=()=>onChange&&onChange('lineage');
   rebuild('all');
@@ -570,6 +574,8 @@ function SeedsUI(DIM, onChange, ruleChoices){
     refreshRules(){ const ids=ruleChoices().map(c=>c.id); S.forEach(s=>{ if(!ids.includes(s.r))s.r='shown'; }); table(); },
     // [x,y,z,delay,state] per cell, for the simulators
     // [x,y,z,delay,state,ruleIndex] per cell plus the rules: index -1 is the organism being shown or evolved
+    // call before evolving: shows the problem and returns true if the run would be pointless
+    blockEvolve(){ const w=problem(); $s('sWarn').textContent=w; $s('sWarn').style.display=w?'block':'none'; if(w) $s('sWarn').scrollIntoView({block:'nearest',behavior:'smooth'}); return !!w; },
     pack(resolve){ const rules=[], idx=new Map(); const seeds=list().map(s=>{ let ri=-1; if(s.r!=='shown'){ const r=resolve(s.r); if(r){ if(!idx.has(s.r)){ idx.set(s.r,rules.length); rules.push(Array.from(r)); } ri=idx.get(s.r); } } return [s.p[0],s.p[1],s.p[2],s.d,s.c,ri]; });
       return {seeds,rules}; },
     packed:()=>list().map(s=>[s.p[0],s.p[1],s.p[2],s.d,s.c,-1]),
@@ -675,7 +681,7 @@ function refresh(){ let done=0,tot=0,sims=0; lineages.forEach(L=>{ done+=L.i-(L.
   const best=lineages.reduce((b,L,k)=>L.cur>lineages[b].cur?k:b,0);
   if(running && lineages[best].cur>lastBest && !playing && performance.now()-lastTouch>4000){ lastBest=lineages[best].cur; selected=best; show(lineages[best].rule,'Lineage '+(best+1)+', latest'); }
   renderPop(); renderLin(); drawChart(); }
-$('go').onclick=()=>{ halt(); showErr(''); seedsDirty=false; params=readParams(); lineages=[]; selected=0; lastBest=-1;
+$('go').onclick=()=>{ if(SEEDS&&SEEDS.blockEvolve()) return; halt(); showErr(''); seedsDirty=false; params=readParams(); lineages=[]; selected=0; lastBest=-1;
   const n=Math.max(1,Math.min(8,+$('nLin').value|0)); for(let k=0;k<n;k++) lineages.push({rule:new Uint8Array(SP.NC),i:0,sims:0,cur:0,imps:[],hist:[]});
   setRunning(true); lineages.forEach(startLineage); refresh(); };
 $('cont').onclick=()=>{ if(!lineages.length) return; params={...params,budget:Math.max(100,+$('budget').value|0),pw:+$('pw').value}; setRunning(true); lineages.forEach(startLineage); };
